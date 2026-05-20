@@ -1,319 +1,458 @@
+<div align="center">
+
 # PRTG Grafana Datasource Plugin
+
+Grafana datasource plugin for PRTG Network Monitor. Use PRTG groups, devices, sensors, channels, raw values, text values, and manual API calls directly inside Grafana dashboards.
+
+![Grafana](https://img.shields.io/badge/Grafana-%3E%3D10.4-F46800?style=flat&logo=grafana&logoColor=white&labelColor=555555)
+![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?style=flat&logo=go&logoColor=white&labelColor=555555)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?style=flat&logo=typescript&logoColor=white&labelColor=555555)
+![React](https://img.shields.io/badge/React-18.2-61DAFB?style=flat&logo=react&logoColor=111111&labelColor=555555)
+![Node](https://img.shields.io/badge/Node-%3E%3D22-339933?style=flat&logo=node.js&logoColor=white&labelColor=555555)
+![License](https://img.shields.io/badge/License-Apache%202.0-97CA00?style=flat&labelColor=555555)
+
+</div>
+
+## Overview
 
 This repository contains a Grafana datasource plugin for PRTG, allowing users to visualize and analyze PRTG metrics within Grafana.
 
-## Introduction
+The plugin integrates with PRTG and fetches data from PRTG sensors directly into Grafana dashboards. It provides a practical way to monitor, analyze, and visualize PRTG data with Grafana panels.
 
-This Grafana datasource plugin integrates with PRTG, enabling users to fetch and display data from PRTG sensors directly in Grafana dashboards. It provides a seamless way to monitor and analyze PRTG data using Grafana's powerful visualization tools.
+Plugin metadata read from `maxmarkusprogram-prtg-datasource`:
 
-## Installation
+| Item | Value |
+| --- | --- |
+| Plugin ID | `maxmarkusprogram-prtg-datasource` |
+| Plugin type | Grafana datasource |
+| Package name | `prtg` |
+| Version | `1.0.0` |
+| Grafana dependency | `>=10.4.0` |
+| Backend | Go / Grafana Plugin SDK |
+| Frontend | TypeScript, React, Grafana UI |
+| License | Apache 2.0 |
 
-First you need to download docker and go(golang) to your computer
+## Features
 
-Install [Docker](https://www.docker.com/)
+- Grafana datasource plugin for PRTG Network Monitor.
+- Backend plugin support with health checks and PRTG API access.
+- Metrics query flow: group, device, sensor, and channel selection.
+- Raw query flow with property and filter property selection.
+- Text query flow for displaying PRTG text data.
+- Manual API methods such as `getsensordetails.json` and `getstatus.htm`.
+- Optional panel labels for group, device, and sensor names.
+- Cache time and timezone configuration.
+- Grafana metrics, logs, annotations, alerting, and backend support declared in `plugin.json`.
 
-Install [Go](https://go.dev/dl/)
+## Requirements
 
-1. Clone the repository:
+Install these tools before building or running the plugin:
 
-   ```sh
-   git clone https://github.com/1DeliDolu/PRTG.git
-   ```
-2. Navigate to the plugin directory:
+- [Docker](https://www.docker.com/)
+- [Go](https://go.dev/dl/)
+- Node.js `>=22`
+- npm `11.3.0` or compatible
+- Grafana `>=10.4.0`
 
-   ```sh
-   cd PRTG/maxmarkusprogram-prtg-datasource
-   ```
-3. Install dependencies:
+## Quick Start
 
-   ```sh
-   npm install
-   ```
-4. Build the plugin:
+Clone the repository:
 
-   ```sh
-   npm run build
-   ```
-5. Build backend plugin
-
-```text
-   mage
+```sh
+git clone https://github.com/1DeliDolu/PRTG.git
 ```
 
-6. Rename the `dist` directory to
+Navigate to the plugin directory:
 
-   ```
-   cp -r dist /var/lib/grafana/plugins/PRTG
-   ```
-7. Restart Grafana:
-
-   **with wsl**
-
-   ```
-   sudo systemctl restart grafana-server
-   ```
-
-
-**
-    or with Powershell**
-
-```
-net stop grafana
-
-net start grafana
+```sh
+cd PRTG/maxmarkusprogram-prtg-datasource
 ```
 
-### **... or**
+Install frontend dependencies:
 
-After clone, copy ***Prtg Folder*** to C:\Program Files\GrafanaLabs\grafana\data\plugins
+```sh
+npm install
+```
 
-**Restart Grafana:**
+Build the frontend plugin:
+
+```sh
+npm run build
+```
+
+Build the backend plugin:
+
+```sh
+mage
+```
+
+Copy the built plugin to Grafana's plugin directory:
+
+```sh
+cp -r dist /var/lib/grafana/plugins/PRTG
+```
+
+Restart Grafana on Linux or WSL:
 
 ```sh
 sudo systemctl restart grafana-server
 ```
 
+Restart Grafana on Windows PowerShell:
+
+```powershell
+net stop grafana
+net start grafana
+```
+
+### Windows Manual Copy Alternative
+
+After cloning and building, copy the `Prtg` folder to:
+
+```text
+C:\Program Files\GrafanaLabs\grafana\data\plugins
+```
+
+Then restart Grafana.
+
 ## Configuration
 
 1. Open Grafana and navigate to the Data Sources page.
-2. Click on "Add data source" and select "PRTG".
-3. Configure the PRTG datasource by providing the necessary connection details such as PRTG server URL, API key, and other relevant settings.
-4. Save and test the datasource to ensure it is working correctly.
+2. Click **Add data source** and select **PRTG**.
+3. Configure the PRTG datasource with the required connection details.
+4. Enter the PRTG server path without `https://`.
+5. Enter the API key or API token.
+6. Set cache time in seconds. The editor accepts values from `10` seconds upward.
+7. Select the timezone. If no timezone is configured, the backend defaults to `Europe/Berlin`.
+8. Save and test the datasource.
+
+Provisioning example from `maxmarkusprogram-prtg-datasource/provisioning/datasources/datasources.yml`:
+
+```yaml
+apiVersion: 1
+
+datasources:
+  - name: 'PRTG'
+    type: 'maxmarkusprogram-prtg-datasource'
+    access: proxy
+    isDefault: false
+    orgId: 1
+    version: 1
+    editable: true
+    jsonData:
+      path: 'your-prtg-server'
+      cacheTime: 6000
+    secureJsonData:
+      apiKey: 'your-api-token'
+```
 
 ## Usage
 
-1. Create a new dashboard or open an existing one in Grafana.
+1. Create a new dashboard or open an existing Grafana dashboard.
 2. Add a new panel and select the PRTG datasource.
 3. Configure the query to fetch data from the desired PRTG sensors.
 4. Customize the visualization settings to display the data as needed.
 
+Supported query types:
+
+| Query type | Purpose |
+| --- | --- |
+| `Metrics` | Select group, device, sensor, and channel for time series panels. |
+| `Raw` | Select PRTG properties and filter properties. |
+| `Text` | Display text-based PRTG values. |
+| `Manual` | Call supported manual PRTG API endpoints. |
+
+## Development
+
+Run the plugin in development mode:
+
+```sh
+npm run dev
+```
+
+Start Grafana with Docker for local plugin testing:
+
+```sh
+npm run server
+```
+
+Run frontend tests:
+
+```sh
+npm run test:ci
+```
+
+Run E2E tests:
+
+```sh
+npm run e2e
+```
+
+Run linting:
+
+```sh
+npm run lint
+```
+
+Sign the plugin when distributing outside local development:
+
+```sh
+npm run sign
+```
+
 ## Troubleshooting
 
-If you encounter any issues, please refer to the following troubleshooting steps:
-
-- Ensure the PRTG server URL and API key are correctly configured.
-- Check the Grafana server logs for any error messages.
-- Verify that the plugin is correctly installed in Grafana's plugin directory.
+- Ensure the PRTG server path and API key are correctly configured.
+- Check Grafana server logs for error messages.
+- Verify that the plugin is installed in Grafana's plugin directory.
 - Restart Grafana and try again.
+- For development builds, make sure Docker, Go, Node.js, npm, and Mage are available.
 
-## Additional Resources
+## Resources
 
 - [Grafana Plugin Development Documentation](https://grafana.com/developers/plugin-tools/)
 - [PRTG API Documentation](https://www.paessler.com/manuals/prtg/api)
+- [Grafana plugin.json documentation](https://grafana.com/developers/plugin-tools/reference/plugin-json)
+- [Grafana plugin signing documentation](https://grafana.com/developers/plugin-tools/publish-a-plugin/sign-a-plugin)
 
-Feel free to contribute to this project by submitting issues or pull requests.
+Contributions are welcome through issues and pull requests.
 
-You can now save this content in the README.md file in your repository.
+This README is the maintained repository documentation. The original README note to save the content in `README.md` is now reflected here.
 
 ## Config Editor
 
-1. Open `http://localhost:3000/` in browser or  `http://grafana.prtg:3000/connections/datasources`
+Open `http://localhost:3000/` in a browser or go directly to `http://grafana.prtg:3000/connections/datasources`.
 
-![1739793462631](image/README/1739793462631.png)
+![Open Grafana datasource page](image/README/1739793462631.png)
 
-2. Press PRTG
+Press **PRTG**.
 
-  ![1739793798353](image/README/1739793798353.png)
+![Select PRTG datasource](image/README/1739793798353.png)
 
-3. Enter your prtg server
+Enter your PRTG server.
 
-![1739793866048](image/README/1739793866048.png)
+![Enter PRTG server](image/README/1739793866048.png)
 
-4. Enter your api-token and Press save & test
+Enter your API token and press **Save & test**.
 
-  ![1739793921893](image/README/1739793921893.png)
+![Save and test datasource](image/README/1739793921893.png)
 
-5.Press Build an Dashboard
+Press **Build a dashboard**.
 
-![1739794001603](image/README/1739794001603.png)
+![Build dashboard](image/README/1739794001603.png)
 
-6.Press Add visualizaton[
-]()
-![1739794068185](image/README/1739794068185.png)
+Press **Add visualization**.
 
-7.Press PRTG
+![Add visualization](image/README/1739794068185.png)
 
-![1739794166798](image/README/1739794166798.png)
+Press **PRTG**.
+
+![Select PRTG panel datasource](image/README/1739794166798.png)
 
 ## Query Metrics
 
-Select Query Type
+Select **Query Type**.
 
-![1739795234405](image/README/1739795234405.png)
+![Select query type](image/README/1739795234405.png)
 
-9.Select Group
+Select **Group**.
 
-![1739795274666](image/README/1739795274666.png)
+![Select group](image/README/1739795274666.png)
 
-10.Select Device
+Select **Device**.
 
-![1739795311709](image/README/1739795311709.png)
+![Select device](image/README/1739795311709.png)
 
-11.Select Sensor
+Select **Sensor**.
 
-![1739795351207](image/README/1739795351207.png)
+![Select sensor](image/README/1739795351207.png)
 
-12.Select Channel
+Select **Channel**.
 
-![1739795402834](image/README/1739795402834.png)
+![Select channel](image/README/1739795402834.png)
 
-13.Look at Panel
+Look at the panel.
 
-![1739795452206](image/README/1739795452206.png)
+![Metrics panel](image/README/1739795452206.png)
 
 ## Options
 
-14.Add Group name in panel
-![1739795578616](image/README/1739795578616.png)
+Add the group name in the panel.
 
-15.Add Device and Sensor
-![1739795687023](image/README/1739795687023.png)
+![Add group name](image/README/1739795578616.png)
 
-16.Add new query
-![1739795739188](image/README/1739795739188.png)
+Add device and sensor names.
 
-17.Select Query, Group, Device, Sensor and Channel
-![1739795941422](image/README/1739795941422.png)
+![Add device and sensor](image/README/1739795687023.png)
 
-18.An another example
-![1739796156994](image/README/1739796156994.png)
+Add a new query.
 
-19.Fill Opacity
-![1739796291106](image/README/1739796291106.png)
+![Add new query](image/README/1739795739188.png)
 
-20.Select Stat
-![1739796324396](image/README/1739796324396.png)
+Select query, group, device, sensor, and channel.
+
+![Select query details](image/README/1739795941422.png)
+
+Another example.
+
+![Another example](image/README/1739796156994.png)
+
+Fill opacity.
+
+![Fill opacity](image/README/1739796291106.png)
+
+Select **Stat**.
+
+![Select stat visualization](image/README/1739796324396.png)
 
 ## Query Raw
 
-1.Select Query Raw, Group, Device, Sensor,  Property and Filter Property
+Select **Query Raw**, group, device, sensor, property, and filter property.
 
-  ![1739796514348](image/README/1739796514348.png)
+![Query raw configuration](image/README/1739796514348.png)
 
-2. Examples
+Examples:
 
-  ![1739796591456](image/README/1739796591456.png)
+![Query raw examples](image/README/1739796591456.png)
 
 ## Query Text
 
-1.Query Text
-![1739796808632](image/README/1739796808632.png)
-![1739796830021](image/README/1739796830021.png)
+Query text examples:
+
+![Query text example 1](image/README/1739796808632.png)
+
+![Query text example 2](image/README/1739796830021.png)
 
 ## Panel
 
-![1739797181230](image/README/1739797181230.png)
+![Panel example 1](image/README/1739797181230.png)
 
-![1739797385328](image/README/1739797385328.png)
+![Panel example 2](image/README/1739797385328.png)
 
-![1739797413883](image/README/1739797413883.png)
+![Panel example 3](image/README/1739797413883.png)
 
-## Video
+## Video Walkthrough
 
-1. copy repository  https://github.com/1DeliDolu/PRTG.git
+Copy the repository:
+
+```text
+https://github.com/1DeliDolu/PRTG.git
+```
 
 <video width="1000" height="500" controls>
   <source src="./video/clone.mp4" type="video/mp4">
 </video>
-``
 
-2. open vs code and terminal with bash. Clone Repository
+Open VS Code and a Bash terminal, then clone the repository.
 
 <video width="1000" height="500" controls>
   <source src="./video/vsc_clone.mp4" type="video/mp4">
 </video>
-``
 
-3. Open new terminal with  wsl (i use debian) and  land "maxmarkusprogram-prtg-datasource" cd maxmarkusprogram-prtg-datasource
+Open a new WSL terminal, enter the `maxmarkusprogram-prtg-datasource` folder, and run:
 
-<video width="10000" height="500" controls>
+```sh
+cd maxmarkusprogram-prtg-datasource
+```
+
+<video width="1000" height="500" controls>
   <source src="./video/cd.mp4" type="video/mp4">
 </video>
-``
 
-4. npm install
+Install dependencies:
+
+```sh
+npm install
+```
 
 <video width="1000" height="500" controls>
   <source src="./video/npminstall.mp4" type="video/mp4">
 </video>
-``
 
-5. npm run build
+Build the frontend:
+
+```sh
+npm run build
+```
 
 <video width="1000" height="500" controls>
   <source src="./video/build.mp4" type="video/mp4">
 </video>
-``
 
-7. mage
+Build the backend:
+
+```sh
+mage
+```
 
 <video width="1000" height="500" controls>
   <source src="./video/mage.mp4" type="video/mp4">
 </video>
-``
 
-7. mv dist/ Prtg
+Rename or move `dist` to `Prtg`.
 
 <video width="1000" height="500" controls>
   <source src="./video/prtg.mp4" type="video/mp4">
 </video>
-``
 
-8. close vs code
+Close VS Code.
 
 <video width="1000" height="500" controls>
   <source src="./video/closevsc.mp4" type="video/mp4">
 </video>
-``
 
-9. copy
+Copy the `Prtg` folder.
 
 <video width="1000" height="500" controls>
   <source src="./video/copy.mp4" type="video/mp4">
 </video>
-``
 
-10. paste Prtg in C:\Program Files\GrafanaLabs\grafana\data\plugins
+Paste `Prtg` into the Grafana plugin directory:
+
+```text
+C:\Program Files\GrafanaLabs\grafana\data\plugins
+```
 
 <video width="1000" height="500" controls>
   <source src="./video/paste.mp4" type="video/mp4">
 </video>
-``
 
-11. Stop and start Grafana with powershell
+Stop and start Grafana with PowerShell:
+
+```powershell
+net stop grafana
+net start grafana
+```
 
 <video width="1000" height="500" controls>
   <source src="./video/stop-start-grafana.mp4" type="video/mp4">
 </video>
-``
 
-12. Sign in
+Sign in. On the first login, Grafana's default username and password are usually:
 
-    **at firts time
-    `user admin pasword admin`**
+```text
+user: admin
+password: admin
+```
 
 <video width="1000" height="500" controls>
   <source src="./video/anmeldung.mp4" type="video/mp4">
 </video>
-``
 
-13. Datasource panel
+Open the datasource panel.
 
 <video width="1000" height="500" controls>
   <source src="./video/datasource.mp4" type="video/mp4">
 </video>
-``
 
-14.Create query
+Create a query.
 
 <video width="1000" height="500" controls>
   <source src="./video/query.mp4" type="video/mp4">
 </video>
-``
 
-15. dashboard
+Open the dashboard.
 
 <video width="1000" height="500" controls>
   <source src="./video/dashboard.mp4" type="video/mp4">
 </video>
-``
