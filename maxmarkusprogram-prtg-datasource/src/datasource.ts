@@ -6,6 +6,7 @@ import {
   DataQueryRequest,
   DataQueryResponse,
   LiveChannelScope,
+  MetricFindValue,
 } from '@grafana/data';
 import { 
   DataSourceWithBackend, 
@@ -31,15 +32,81 @@ export class DataSource extends DataSourceWithBackend<MyQuery, MyDataSourceOptio
   }
 
   applyTemplateVariables(query: MyQuery, scopedVars: ScopedVars) {
-    const replaced = getTemplateSrv().replace(query.channel, scopedVars);
+    const templateSrv = getTemplateSrv();
+    const replace = (value?: string) => templateSrv.replace(value || '', scopedVars);
+    const channel = replace(query.channel);
+    const channelArray = query.channelArray?.map((item) => replace(item)).filter(Boolean) || [];
+
     return {
       ...query,
-      channel: replaced,
+      group: replace(query.group),
+      groupId: replace(query.groupId),
+      device: replace(query.device),
+      deviceId: replace(query.deviceId),
+      sensor: replace(query.sensor),
+      sensorId: replace(query.sensorId),
+      channel,
+      channelArray,
+      manualObjectId: replace(query.manualObjectId),
     }
   }
 
   filterQuery(query: MyQuery): boolean {
-    return !!query.channel
+    if (query.queryType === QueryType.Metrics) {
+      return Boolean(query.sensorId && (query.channel || query.channelArray?.length));
+    }
+
+    return true;
+  }
+
+  async metricFindQuery(query: string | { query?: string }): Promise<MetricFindValue[]> {
+    const queryText = typeof query === 'string' ? query : query.query || '';
+    const [kind, ...argParts] = queryText.split(':');
+    const rawArg = argParts.join(':');
+    const arg = getTemplateSrv().replace(rawArg).trim();
+
+    switch (kind.trim()) {
+      case 'groups': {
+        const response = await this.getGroups();
+        return response.groups
+          .filter((item) => item.group)
+          .map((item) => ({ text: item.group, value: item.group }));
+      }
+      case 'devices': {
+        if (!arg) {
+          return [];
+        }
+        const response = await this.getDevices(arg);
+        return response.devices
+          .filter((item) => item.device)
+          .map((item) => ({ text: item.device, value: item.device }));
+      }
+      case 'sensors': {
+        if (!arg) {
+          return [];
+        }
+        const response = await this.getSensors(arg);
+        return response.sensors
+          .filter((item) => item.sensor && item.objid)
+          .map((item) => ({ text: item.sensor, value: String(item.objid) }));
+      }
+      case 'channels': {
+        if (!arg) {
+          return [];
+        }
+        const response = await this.getChannels(arg);
+        const channelData = response.values?.[0];
+        if (!channelData) {
+          return [];
+        }
+
+        return Object.keys(channelData)
+          .filter((key) => key !== 'datetime')
+          .map((key) => ({ text: key, value: key }));
+      }
+      default:
+        return [];
+    }
   }
 
   async getGroups(): Promise<PRTGGroupListResponse> {
