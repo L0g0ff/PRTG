@@ -45,5 +45,7 @@ ci/
 
 .eslintcache
 
-
 ../provisioning/
+
+.env
+.env.local
