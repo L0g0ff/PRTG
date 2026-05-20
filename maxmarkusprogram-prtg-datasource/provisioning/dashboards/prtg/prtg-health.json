@@ -22,10 +22,7 @@
   "links": [],
   "panels": [
     {
-      "datasource": {
-        "type": "maxmarkusprogram-prtg-datasource",
-        "uid": "prtg"
-      },
+      "datasource": "PRTG",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -86,10 +83,7 @@
         {
           "channel": "",
           "channelArray": [],
-          "datasource": {
-            "type": "maxmarkusprogram-prtg-datasource",
-            "uid": "prtg"
-          },
+          "datasource": "PRTG",
           "device": "",
           "deviceId": "",
           "filterProperty": "",
@@ -146,6 +140,6 @@
   "timezone": "browser",
   "title": "PRTG Health",
   "uid": "prtg-health",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
