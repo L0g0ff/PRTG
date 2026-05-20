@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"errors"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -28,6 +30,10 @@ type Metrics struct {
 }
 
 func NewMetrics(reg prometheus.Registerer) *Metrics {
+	if reg == nil {
+		reg = prometheus.DefaultRegisterer
+	}
+
 	m := &Metrics{
 		apiRequests: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -66,13 +72,44 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		),
 	}
 
-	reg.MustRegister(m.apiRequests)
-	reg.MustRegister(m.apiLatency)
-	reg.MustRegister(m.queryDuration)
-	reg.MustRegister(m.cacheHits)
-	reg.MustRegister(m.errorCounter)
+	m.apiRequests = registerCounterVec(reg, m.apiRequests)
+	m.apiLatency = registerHistogramVec(reg, m.apiLatency)
+	m.queryDuration = registerHistogramVec(reg, m.queryDuration)
+	m.cacheHits = registerCounterVec(reg, m.cacheHits)
+	m.errorCounter = registerCounterVec(reg, m.errorCounter)
 
 	return m
+}
+
+func registerCounterVec(reg prometheus.Registerer, collector *prometheus.CounterVec) *prometheus.CounterVec {
+	if err := reg.Register(collector); err != nil {
+		existing := alreadyRegisteredCollector(err)
+		if counter, ok := existing.(*prometheus.CounterVec); ok {
+			return counter
+		}
+	}
+
+	return collector
+}
+
+func registerHistogramVec(reg prometheus.Registerer, collector *prometheus.HistogramVec) *prometheus.HistogramVec {
+	if err := reg.Register(collector); err != nil {
+		existing := alreadyRegisteredCollector(err)
+		if histogram, ok := existing.(*prometheus.HistogramVec); ok {
+			return histogram
+		}
+	}
+
+	return collector
+}
+
+func alreadyRegisteredCollector(err error) prometheus.Collector {
+	var alreadyRegistered prometheus.AlreadyRegisteredError
+	if errors.As(err, &alreadyRegistered) {
+		return alreadyRegistered.ExistingCollector
+	}
+
+	return nil
 }
 
 func (m *Metrics) IncAPIRequest(endpoint string) {
