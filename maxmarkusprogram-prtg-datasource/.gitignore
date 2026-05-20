@@ -47,3 +47,6 @@ ci/
 
 
 ../provisioning/
+
+.env
+.env.local
