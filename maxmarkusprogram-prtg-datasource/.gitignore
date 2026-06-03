@@ -49,3 +49,8 @@ ci/
 
 .env
 .env.local
+
+_docs/
+.claude/
+.codex/
+.config/AGENTS/
