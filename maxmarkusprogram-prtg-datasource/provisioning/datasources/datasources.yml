@@ -2,6 +2,7 @@ apiVersion: 1
 
 datasources:
   - name: 'PRTG'
+    uid: 'prtg'
     type: 'maxmarkusprogram-prtg-datasource'
     access: proxy
     isDefault: false
@@ -9,7 +10,7 @@ datasources:
     version: 1
     editable: true
     jsonData:
-      path: 'vvvv'
+      path: '${PRTG_PATH}'
       cacheTime: 6000
     secureJsonData:
-      apiKey: 'xxx'
+      apiKey: '${PRTG_API}'

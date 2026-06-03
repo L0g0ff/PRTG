@@ -74,18 +74,32 @@ describe('DataSource', () => {
     });
 
     it('should handle template variables', () => {
-        const query = createMockQuery({ channel: '$channel' });
-        mockTemplateSrv.replace.mockReturnValue('replaced-channel');
+        const query = createMockQuery({
+            sensorId: '$sensor',
+            channel: '$channel',
+            channelArray: ['$channel'],
+        });
+        mockTemplateSrv.replace.mockImplementation((value: string) => {
+            const replacements: Record<string, string> = {
+                '$sensor': '1025',
+                '$channel': 'Total',
+            };
+            return replacements[value] ?? value;
+        });
 
         const result = dataSource.applyTemplateVariables(query, {});
-        
+
         expect(mockTemplateSrv.replace).toHaveBeenCalledWith('$channel', {});
-        expect(result.channel).toBe('replaced-channel');
+        expect(result.sensorId).toBe('1025');
+        expect(result.channel).toBe('Total');
+        expect(result.channelArray).toEqual(['Total']);
     });
 
     it('should filter queries by channel', () => {
-        expect(dataSource.filterQuery(createMockQuery({ channel: 'test' }))).toBe(true);
+        expect(dataSource.filterQuery(createMockQuery({ sensorId: '1025', channel: 'test' }))).toBe(true);
+        expect(dataSource.filterQuery(createMockQuery({ sensorId: '1025', channelArray: ['test'] }))).toBe(true);
         expect(dataSource.filterQuery(createMockQuery({ channel: '' }))).toBe(false);
+        expect(dataSource.filterQuery(createMockQuery({ queryType: QueryType.Manual, channel: '' }))).toBe(true);
     });
 
     it('should handle resource calls', async () => {
@@ -96,7 +110,32 @@ describe('DataSource', () => {
 
     it('should handle device errors', async () => {
         await expect(dataSource.getDevices('')).rejects.toThrow('group is required');
-    });    it('should handle query calls', () => {
+    });
+
+    it('should return metric find values for PRTG dashboard variables', async () => {
+        (dataSource as any).getResource.mockImplementation((path: string) => {
+            switch (path) {
+                case 'groups':
+                    return Promise.resolve({ groups: [{ group: 'Core' }] });
+                case 'devices/Core':
+                    return Promise.resolve({ devices: [{ device: 'Probe' }] });
+                case 'sensors/Probe':
+                    return Promise.resolve({ sensors: [{ sensor: 'CPU Load', objid: 1025 }] });
+                case 'channels/1025':
+                    return Promise.resolve({ values: [{ datetime: 'ignored', Total: 10 }] });
+                default:
+                    return Promise.resolve({});
+            }
+        });
+        mockTemplateSrv.replace.mockImplementation((value: string) => value.replace('$group', 'Core').replace('$device', 'Probe').replace('$sensor', '1025'));
+
+        await expect(dataSource.metricFindQuery('groups')).resolves.toEqual([{ text: 'Core', value: 'Core' }]);
+        await expect(dataSource.metricFindQuery({ query: 'devices:$group' })).resolves.toEqual([{ text: 'Probe', value: 'Probe' }]);
+        await expect(dataSource.metricFindQuery('sensors:$device')).resolves.toEqual([{ text: 'CPU Load', value: '1025' }]);
+        await expect(dataSource.metricFindQuery('channels:$sensor')).resolves.toEqual([{ text: 'Total', value: 'Total' }]);
+    });
+
+    it('should handle query calls', () => {
         const mockRequest: DataQueryRequest<MyQuery> = {
             requestId: 'test',
             interval: '1s',
