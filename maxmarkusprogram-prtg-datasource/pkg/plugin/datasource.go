@@ -3,12 +3,17 @@ package plugin
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/models"
+	healthsvc "github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/health"
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/observability"
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/prtg"
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/prtgtime"
+	querysvc "github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/query"
+	resourcesvc "github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/resource"
+	streamsvc "github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/stream"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -27,7 +32,7 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		return nil, err
 	}
 
-	SetDefaultTimezone(config.Timezone)
+	prtgtime.SetDefaultTimezone(config.Timezone)
 
 	var cacheTime time.Duration = 60 * time.Second
 	if config.CacheTime > 0 {
@@ -35,53 +40,38 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	}
 
 	baseURL := fmt.Sprintf("https://%s", config.Path)
-	logger := NewLogger()
-	tracer := NewTracer(logger)
-	metrics := NewMetrics(prometheus.DefaultRegisterer)
+	logger := observability.NewLogger()
+	tracer := observability.NewTracer(logger)
+	metrics := observability.NewMetrics(prometheus.DefaultRegisterer)
+	api := prtg.NewApi(baseURL, config.Secrets.ApiKey, cacheTime, 10*time.Second)
+	queryService := querysvc.NewService(api, logger, tracer, metrics, cacheTime)
 
 	ds := &Datasource{
-		baseURL:    baseURL,
-		api:        NewApi(baseURL, config.Secrets.ApiKey, cacheTime, 10*time.Second),
-		logger:     logger,
-		tracer:     tracer,
-		metrics:    metrics,
-		queryCache: make(map[string]*QueryCacheEntry),
-		cacheMutex: sync.RWMutex{},
-		cacheTime:  cacheTime,
-		streamManager: &streamManager{
-			streams:          make(map[string]*activeStream),
-			activeStreams:    make(map[string]map[string]*activeStream),
-			defaultCacheTime: cacheTime,
-		},
+		api:    api,
+		logger: logger,
+		query:  queryService,
 	}
+	ds.resource = resourcesvc.NewService(api, logger, tracer, metrics)
+	ds.stream = streamsvc.NewService(logger, queryService, cacheTime)
+	ds.health = healthsvc.NewService(api, logger, ds.ClearAllCaches)
 
-	queryTypeMux := datasource.NewQueryTypeMux()
-	queryTypeMux.HandleFunc("metrics", ds.handleMetricsQueryType)
-	queryTypeMux.HandleFunc("manual", ds.handleManualQueryType)
-	queryTypeMux.HandleFunc("text", ds.handlePropertyQueryType)
-	queryTypeMux.HandleFunc("raw", ds.handlePropertyQueryType)
-	queryTypeMux.HandleFunc("", ds.handleQueryFallback)
-
-	ds.mux = queryTypeMux
 	return ds, nil
 }
 
 func (d *Datasource) Dispose() {
-	d.cacheMutex.Lock()
-	d.queryCache = make(map[string]*QueryCacheEntry)
-	d.cacheMutex.Unlock()
-
-	if apiImpl, ok := d.api.(*Api); ok {
+	if d.query != nil {
+		d.query.ClearCache()
+	}
+	if apiImpl, ok := d.api.(*prtg.Api); ok {
 		apiImpl.ClearCache()
 	}
 }
 
 func (d *Datasource) ClearAllCaches() {
-	d.cacheMutex.Lock()
-	d.queryCache = make(map[string]*QueryCacheEntry)
-	d.cacheMutex.Unlock()
-
-	if apiImpl, ok := d.api.(*Api); ok {
+	if d.query != nil {
+		d.query.ClearCache()
+	}
+	if apiImpl, ok := d.api.(*prtg.Api); ok {
 		apiImpl.ClearCache()
 	}
 

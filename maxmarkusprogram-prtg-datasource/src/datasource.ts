@@ -1,20 +1,18 @@
 import { 
   DataSourceInstanceSettings, 
   ScopedVars, 
-  AnnotationEvent,
-  DataFrame,
   DataQueryRequest,
   DataQueryResponse,
-  LiveChannelScope,
   MetricFindValue,
 } from '@grafana/data';
 import { 
   DataSourceWithBackend, 
   getTemplateSrv,
-  getGrafanaLiveSrv,
 } from '@grafana/runtime';
 import { Observable, from, merge, throwError } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { catchError } from 'rxjs/operators';
+import { processAnnotationEvents } from './datasource/annotations';
+import { createStreamingQueryObservable } from './datasource/streaming';
 import {
   MyQuery,
   MyDataSourceOptions,
@@ -136,33 +134,7 @@ export class DataSource extends DataSourceWithBackend<MyQuery, MyDataSourceOptio
 
   annotations = {
     QueryEditor: undefined,
-    processEvents: (anno: any, data: DataFrame[]): Observable<AnnotationEvent[]> => {
-      const events: AnnotationEvent[] = [];
-      
-      data.forEach((frame) => {
-        const timeField = frame.fields.find((field) => field.name === 'Time');
-        const valueField = frame.fields.find((field) => field.name === 'Value');
-        
-        if (timeField && valueField) {
-          const firstTime = timeField.values[0];
-          const lastTime = timeField.values[timeField.values.length - 1];
-          const firstValue = valueField.values[0];
-          const panelId = typeof anno.panelId === 'number' ? anno.panelId : undefined;
-          const source = frame.name || 'PRTG Channel';
-
-          events.push({
-            time: firstTime,
-            timeEnd: lastTime !== firstTime ? lastTime : undefined,
-            title: source,
-            text: `Value: ${firstValue}`,
-            tags: ['prtg', `value:${firstValue}`, `source:${source}`],
-            panelId: panelId
-          });
-        }
-      });
-
-      return from([events]);
-    },
+    processEvents: processAnnotationEvents,
   };
 
   query(request: DataQueryRequest<MyQuery>): Observable<DataQueryResponse> {
@@ -179,60 +151,7 @@ export class DataSource extends DataSourceWithBackend<MyQuery, MyDataSourceOptio
     // Process streaming targets
     if (streamingTargets.length > 0) {
       streamingTargets.forEach((query) => {
-        // Add panelId to query for stream ID generation
-        const queryWithPanelId = {
-          ...query,
-          panelId: request.panelId?.toString()
-        };
-        
-        // Create a unique, stable stream ID
-        const streamId = this.getStreamId(queryWithPanelId);
-        const streamPath = `prtg-stream/${streamId}`;
-        
-        // Set up the data stream
-        const streamObs = getGrafanaLiveSrv().getDataStream({
-          addr: {
-            scope: LiveChannelScope.DataSource,
-            namespace: this.uid,
-            path: streamPath,
-            data: {
-              ...query,
-              streamId,
-              panelId: request.panelId?.toString(),
-              queryId: query.refId,
-              timeRange: {
-                from: request.range.from.valueOf(),
-                to: request.range.to.valueOf(),
-              },
-              // Use provided values or defaults
-              cacheTime: query.cacheTime,
-              updateMode: query.updateMode,
-              bufferSize: query.bufferSize,
-            },
-          },
-        }).pipe(
-          map((response) => {
-            // Enhance frame with streaming metadata
-            const frameData = response.data || [];
-            frameData.forEach((frame) => {
-              if (frame && frame.meta) {
-                frame.meta = {
-                  ...frame.meta,
-                  streaming: true,
-                  streamId,
-                  preferredVisualisationType: 'graph',
-                };
-              }
-            });
-            return { data: frameData };
-          }),
-          catchError((err) => {
-            console.error('Stream error:', err);
-            return throwError(() => new Error(`Streaming error: ${err.message || 'Unknown error'}`));
-          })
-        );
-        
-        observables.push(streamObs);
+        observables.push(createStreamingQueryObservable(this.uid, request, query));
       });
     }
 
@@ -257,19 +176,6 @@ export class DataSource extends DataSourceWithBackend<MyQuery, MyDataSourceOptio
     }
     
     return merge(...observables);
-  }
-
-  // Improved stream ID generation for better stability
-  private getStreamId(query: MyQuery & { panelId?: string }): string {
-    const components = [
-      query.panelId || 'default',
-      query.refId || 'A',
-      query.sensorId || '',
-      Array.isArray(query.channelArray) && query.channelArray.length > 0 
-        ? query.channelArray.join('-') 
-        : query.channel || '',
-    ];
-    return components.filter(Boolean).join('_');
   }
 
   // Stream control methods

@@ -1,4 +1,4 @@
-package plugin
+package stream
 
 import (
 	"context"
@@ -6,18 +6,19 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/schema"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 )
 
-func (d *Datasource) runStreamLoop(
+func (s *Service) runStreamLoop(
 	ctx context.Context,
 	stream *activeStream,
-	query queryModel,
+	query schema.QueryModel,
 	sender *backend.StreamSender,
 	timeRangeFrom, timeRangeTo time.Time,
 ) error {
-	defer d.cleanupStream(stream)
+	defer s.cleanupStream(stream)
 
 	timeRange := backend.TimeRange{
 		From: timeRangeFrom,
@@ -28,18 +29,18 @@ func (d *Datasource) runStreamLoop(
 	ticker := time.NewTicker(stream.interval + jitter)
 	defer ticker.Stop()
 
-	if err := d.updateStreamWithMetricsQuery(ctx, stream, sender, query, timeRange); err != nil {
-		d.logger.Error("Initial stream update failed", "error", err)
+	if err := s.updateStreamWithMetricsQuery(ctx, stream, sender, query, timeRange); err != nil {
+		s.logger.Error("Initial stream update failed", "error", err)
 	}
 
-	return d.streamUpdateLoop(ctx, stream, sender, query, timeRange, ticker)
+	return s.streamUpdateLoop(ctx, stream, sender, query, timeRange, ticker)
 }
 
-func (d *Datasource) streamUpdateLoop(
+func (s *Service) streamUpdateLoop(
 	ctx context.Context,
 	stream *activeStream,
 	sender *backend.StreamSender,
-	query queryModel,
+	query schema.QueryModel,
 	timeRange backend.TimeRange,
 	ticker *time.Ticker,
 ) error {
@@ -58,24 +59,24 @@ func (d *Datasource) streamUpdateLoop(
 			}
 
 			updateCtx, cancel := context.WithTimeout(ctx, stream.interval/2)
-			err := d.updateStreamWithMetricsQuery(updateCtx, stream, sender, query, timeRange)
+			err := s.updateStreamWithMetricsQuery(updateCtx, stream, sender, query, timeRange)
 			cancel()
 
-			d.handleStreamError(stream, err)
+			s.handleStreamError(stream, err)
 
 		case <-stream.updateChan:
-			if err := d.updateStreamWithMetricsQuery(ctx, stream, sender, query, timeRange); err != nil {
-				d.logger.Error("Manual update failed", "error", err)
+			if err := s.updateStreamWithMetricsQuery(ctx, stream, sender, query, timeRange); err != nil {
+				s.logger.Error("Manual update failed", "error", err)
 			}
 		}
 	}
 }
 
-func (d *Datasource) handleStreamError(stream *activeStream, err error) {
+func (s *Service) handleStreamError(stream *activeStream, err error) {
 	if err != nil {
 		stream.errorCount++
 		if stream.errorCount <= 3 || stream.errorCount%10 == 0 {
-			d.logger.Error("Stream update failed",
+			s.logger.Error("Stream update failed",
 				"error", err,
 				"count", stream.errorCount,
 				"streamID", stream.streamID)
@@ -85,11 +86,11 @@ func (d *Datasource) handleStreamError(stream *activeStream, err error) {
 	}
 }
 
-func (d *Datasource) updateStreamWithMetricsQuery(
+func (s *Service) updateStreamWithMetricsQuery(
 	ctx context.Context,
 	stream *activeStream,
 	sender *backend.StreamSender,
-	query queryModel,
+	query schema.QueryModel,
 	timeRange backend.TimeRange,
 ) error {
 	if time.Since(stream.lastUpdate) < stream.cacheTime {
@@ -102,7 +103,7 @@ func (d *Datasource) updateStreamWithMetricsQuery(
 	stream.lastUpdate = time.Now()
 
 	baseFrameName := fmt.Sprintf("stream_%s", stream.refID)
-	response := d.handleMetricsQuery(ctx, query, timeRange, baseFrameName)
+	response := s.metricsQuery.HandleMetricsQuery(ctx, query, timeRange, baseFrameName)
 
 	if response.Error != nil {
 		stream.status.lastError = response.Error
@@ -113,10 +114,10 @@ func (d *Datasource) updateStreamWithMetricsQuery(
 		return nil
 	}
 
-	return d.processResponseFrames(stream, sender, response, timeRange)
+	return s.processResponseFrames(stream, sender, response, timeRange)
 }
 
-func (d *Datasource) processResponseFrames(
+func (s *Service) processResponseFrames(
 	stream *activeStream,
 	sender *backend.StreamSender,
 	response backend.DataResponse,
@@ -147,7 +148,7 @@ func (d *Datasource) processResponseFrames(
 		streamFrame := createStreamingFrame(stream, channelName, channelState, timeRange.From, timeRange.To)
 
 		if err := sender.SendFrame(streamFrame, data.IncludeAll); err != nil {
-			d.logger.Error("Failed to send frame", "error", err, "channel", channelName)
+			s.logger.Error("Failed to send frame", "error", err, "channel", channelName)
 			continue
 		}
 	}

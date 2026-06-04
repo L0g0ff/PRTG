@@ -1,4 +1,4 @@
-package plugin
+package query
 
 import (
 	"context"
@@ -6,16 +6,19 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/observability"
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/prtgtime"
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/schema"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 )
 
-func (d *Datasource) handleMetricsQuery(ctx context.Context, qm queryModel, timeRange backend.TimeRange, baseFrameName string) backend.DataResponse {
-	_, span := d.tracer.StartSpan(ctx, "handleMetricsQuery")
+func (s *Service) handleMetricsQuery(ctx context.Context, qm schema.QueryModel, timeRange backend.TimeRange, baseFrameName string) backend.DataResponse {
+	_, span := s.tracer.StartSpan(ctx, "handleMetricsQuery")
 	defer span.End()
 
 	queryStart := time.Now()
-	d.logger.Debug("Fetching historical data",
+	s.logger.Debug("Fetching historical data",
 		"sensorId", qm.SensorId,
 		"timeRange", fmt.Sprintf("%v to %v", timeRange.From, timeRange.To),
 		"channels", qm.ChannelArray,
@@ -25,20 +28,20 @@ func (d *Datasource) handleMetricsQuery(ctx context.Context, qm queryModel, time
 		Frames: make([]*data.Frame, 0),
 	}
 
-	historicalData, err := d.api.GetHistoricalData(qm.SensorId, timeRange.From.UTC(), timeRange.To.UTC())
+	historicalData, err := s.api.GetHistoricalData(qm.SensorId, timeRange.From.UTC(), timeRange.To.UTC())
 	if err != nil {
-		d.logger.Error("Failed to fetch historical data",
+		s.logger.Error("Failed to fetch historical data",
 			"error", err,
 			"sensorId", qm.SensorId,
 		)
-		d.metrics.IncError("historical_data_fetch")
-		recordError(span, err, "Failed to fetch historical data")
+		s.metrics.IncError("historical_data_fetch")
+		observability.RecordError(span, err, "Failed to fetch historical data")
 		return backend.ErrDataResponse(backend.StatusInternal, "failed to fetch data")
 	}
 
 	if len(qm.ChannelArray) == 0 && qm.Channel == "" {
-		d.logger.Error("No channels specified")
-		d.metrics.IncError("missing_channel")
+		s.logger.Error("No channels specified")
+		s.metrics.IncError("missing_channel")
 		return backend.ErrDataResponse(backend.StatusBadRequest, "channel selection required")
 	}
 
@@ -57,7 +60,7 @@ func (d *Datasource) handleMetricsQuery(ctx context.Context, qm queryModel, time
 
 		if historicalData != nil && len(historicalData.HistData) > 0 {
 			for _, item := range historicalData.HistData {
-				parsedTime, _, err := parsePRTGDateTime(item.Datetime)
+				parsedTime, _, err := prtgtime.ParseDateTime(item.Datetime)
 				if err != nil {
 					continue
 				}
@@ -147,7 +150,7 @@ func (d *Datasource) handleMetricsQuery(ctx context.Context, qm queryModel, time
 
 		if historicalData != nil && len(historicalData.HistData) > 0 {
 			for _, item := range historicalData.HistData {
-				parsedTime, _, err := parsePRTGDateTime(item.Datetime)
+				parsedTime, _, err := prtgtime.ParseDateTime(item.Datetime)
 				if err != nil {
 					continue
 				}
@@ -218,7 +221,7 @@ func (d *Datasource) handleMetricsQuery(ctx context.Context, qm queryModel, time
 	}
 
 	duration := time.Since(queryStart)
-	d.metrics.ObserveAPILatency("historical_data", duration.Seconds())
+	s.metrics.ObserveAPILatency("historical_data", duration.Seconds())
 
 	return response
 }

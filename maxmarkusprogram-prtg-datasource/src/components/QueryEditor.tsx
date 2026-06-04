@@ -3,9 +3,6 @@ import {
   InlineField,
   Combobox,
   Stack,
-  FieldSet,
-  InlineSwitch,
-  Input,
   AsyncMultiSelect,
 } from '@grafana/ui';
 import { QueryEditorProps, SelectableValue } from '@grafana/data'
@@ -14,6 +11,10 @@ import { DataSource } from '../datasource'
 import {
   MyDataSourceOptions, MyQuery, queryTypeOptions, QueryType, propertyList, filterPropertyList, manualApiMethods
 } from '../types'
+import { DisplayOptions } from './query-editor/DisplayOptions';
+import { ManualQueryOptions } from './query-editor/ManualQueryOptions';
+import { PropertyOptions } from './query-editor/PropertyOptions';
+import { StreamingOptions } from './query-editor/StreamingOptions';
 
 type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>
 
@@ -519,6 +520,28 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     runQueryIfChanged();
   };
 
+  const onManualMethodChange = useCallback((value: string) => {
+    setManualMethod(value);
+    const updatedQuery = {
+      ...query,
+      manualMethod: value,
+    };
+    onChange(updatedQuery);
+    runQueryIfChanged();
+  }, [query, onChange, runQueryIfChanged]);
+
+  const onPropertyChange = useCallback((value: string) => {
+    const updatedQuery = { ...query, property: value };
+    onChange(updatedQuery);
+    runQueryIfChanged();
+  }, [query, onChange, runQueryIfChanged]);
+
+  const onFilterPropertyChange = useCallback((value: string) => {
+    const updatedQuery = { ...query, filterProperty: value };
+    onChange(updatedQuery);
+    runQueryIfChanged();
+  }, [query, onChange, runQueryIfChanged]);
+
   /* ==================================================  STREAM INTERVAL HANDLERS ==================================================  */
   const handleStreamIntervalChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const value = e.currentTarget.value;
@@ -535,6 +558,18 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     runQueryIfChanged();
   }, [streamIntervalValue, query, onChange, runQueryIfChanged]);
 
+  const onStreamingToggle = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const isStreaming = event.currentTarget.checked;
+    const streamInterval = isStreaming ? (query.streamInterval || 2500) : undefined;
+    const updatedQuery = {
+      ...query,
+      isStreaming,
+      streamInterval,
+    };
+    onChange(updatedQuery);
+    runQueryIfChanged();
+  }, [query, onChange, runQueryIfChanged]);
+
 
 
   /* ================================================== DESTRUCTURING ================================================== */
@@ -549,44 +584,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       onChange(updatedQuery);
     }
   }, [query, onChange]);
-
-  // Streaming section with backend integration
-  const renderStreamingOptions = () => (
-    <FieldSet label="Streaming Options">
-      <Stack direction="row" gap={1}>
-        <InlineField label="Enable Streaming" labelWidth={16}>
-          <InlineSwitch
-            id='query-editor-is-stream'
-            value={query.isStreaming || false} onChange={(e) => {
-              const isStreaming = e.currentTarget.checked;
-              const streamInterval = isStreaming ? (query.streamInterval || 2500) : undefined;
-              const updatedQuery = {
-                ...query,
-                isStreaming,
-                streamInterval,
-              };
-              onChange(updatedQuery);
-              // Run query to update backend state
-              runQueryIfChanged();
-            }}
-          />
-        </InlineField>        {query.isStreaming && (
-          <InlineField label="Update Interval (ms)" labelWidth={20} tooltip="Refresh interval in milliseconds">
-            <Input
-              id='query-editor-stream-interval'
-              type="number"
-              value={streamIntervalValue}
-              onChange={handleStreamIntervalChange}
-              onBlur={handleStreamIntervalBlur}
-              placeholder="2500"
-              min={0}
-              max={60000}
-            />
-          </InlineField>
-        )}
-      </Stack>
-    </FieldSet>
-  );
 
   /* ================================================== RENDER ================================================== */
   return (
@@ -670,121 +667,45 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
       {/* Show display name options for both Metrics and Streaming */}
       {(isMetricsMode || query.isStreaming || isRawMode || isTextMode) && (
-        <FieldSet label="Display Options">
-          <Stack direction="row" gap={1}>
-            <InlineField label="Include Group" labelWidth={16}>
-              <InlineSwitch
-                id={`query-editor-include-group-${query.refId}`}
-                value={query.includeGroupName || false}
-                onChange={onIncludeGroupName}
-              />
-            </InlineField>
-            <InlineField label="Include Device" labelWidth={16}>
-              <InlineSwitch
-                id={`query-editor-include-device-${query.refId}`}
-                value={query.includeDeviceName || false}
-                onChange={onIncludeDeviceName}
-              />
-            </InlineField>
-            <InlineField label="Include Sensor" labelWidth={16}>
-              <InlineSwitch
-                id={`query-editor-include-sensor-${query.refId}`}
-                value={query.includeSensorName || false}
-                onChange={onIncludeSensorName}
-              />
-            </InlineField>
-          </Stack>
-        </FieldSet>
+        <DisplayOptions
+          query={query}
+          onIncludeGroupName={onIncludeGroupName}
+          onIncludeDeviceName={onIncludeDeviceName}
+          onIncludeSensorName={onIncludeSensorName}
+        />
       )}
       
       {/* Options for Text and Raw modes */}
       {(isTextMode || isRawMode) && (
-        <FieldSet label="Options">
-          <Stack direction="row" gap={2}>
-            <InlineField label="Property" labelWidth={16} tooltip="Select property type">
-              <Combobox
-                id='query-editor-property'
-                options={lists.properties.map(p => ({ label: p.label!, value: p.value! }))}
-                value={query.property}
-                onChange={(option) => {
-                  if (option?.value) {
-                    const updatedQuery = { ...query, property: option.value };
-                    onChange(updatedQuery);
-                    runQueryIfChanged();
-                  }
-                }}
-                width={32}
-                placeholder="Select property"
-                isClearable={false}
-              />
-            </InlineField>
-            <InlineField label="Filter Property" labelWidth={16} tooltip="Select filter property">
-              <Combobox
-                id='query-editor-filterProperty'
-                options={lists.filterProperties.map(p => ({ label: p.label!, value: p.value! }))}
-                value={query.filterProperty}
-                onChange={(option) => {
-                  if (option?.value) {
-                    const updatedQuery = { ...query, filterProperty: option.value };
-                    onChange(updatedQuery);
-                    runQueryIfChanged();
-                  }
-                }}
-                width={32}
-                placeholder="Select filter"
-                isClearable={false}
-              />
-            </InlineField>
-          </Stack>
-        </FieldSet>
+        <PropertyOptions
+          property={query.property}
+          filterProperty={query.filterProperty}
+          properties={lists.properties}
+          filterProperties={lists.filterProperties}
+          onPropertyChange={onPropertyChange}
+          onFilterPropertyChange={onFilterPropertyChange}
+        />
       )}      {/* Manual API Query Section */}
       {isManualMode && (
-        <FieldSet label="Manual API Query">
-          <Stack direction="row" gap={2}>
-            <InlineField label="API Method" labelWidth={16} tooltip="Select or enter a custom PRTG API endpoint">
-              <Combobox
-                id='query-editor-manualMethod'
-                options={manualApiMethods.map(method => ({
-                  label: method.label!,
-                  value: method.value!
-                }))}
-                value={manualMethod}
-                onChange={(option) => {
-                  if (option?.value) {
-                    setManualMethod(option.value);
-                    const updatedQuery = {
-                      ...query,
-                      manualMethod: option.value,
-                    };
-                    onChange(updatedQuery);
-                    runQueryIfChanged();
-                  }
-                }}
-                width={32}
-                placeholder="Select or enter API method"
-                createCustomValue={true}
-                isClearable={true}
-              />
-            </InlineField>
-            <InlineField label="Object ID" labelWidth={16} tooltip="Object ID from selected sensor">
-              <Input
-                id='query-editor-manualObjectId'
-                value={manualObjectId || sensorId}
-                onChange={onManualObjectIdChange}
-                placeholder="Automatically filled from sensor"
-                width={32}
-                type="text"
-                disabled={!!sensorId}
-              />
-            </InlineField>
-          </Stack>
-        </FieldSet>
+        <ManualQueryOptions
+          manualMethods={manualApiMethods}
+          manualMethod={manualMethod}
+          manualObjectId={manualObjectId}
+          sensorId={sensorId}
+          onManualMethodChange={onManualMethodChange}
+          onManualObjectIdChange={onManualObjectIdChange}
+        />
       )}
 
       {/* Always show streaming options */}
-      {renderStreamingOptions()}
+      <StreamingOptions
+        query={query}
+        streamIntervalValue={streamIntervalValue}
+        onStreamingToggle={onStreamingToggle}
+        onStreamIntervalChange={handleStreamIntervalChange}
+        onStreamIntervalBlur={handleStreamIntervalBlur}
+      />
 
     </Stack>
   )
 }
-

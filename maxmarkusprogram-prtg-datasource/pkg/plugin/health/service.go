@@ -1,4 +1,4 @@
-package plugin
+package health
 
 import (
 	"context"
@@ -7,20 +7,38 @@ import (
 	"time"
 
 	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/models"
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/observability"
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/prtg"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
-func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
-	d.ClearAllCaches()
+type Service struct {
+	api         prtg.PRTGAPI
+	logger      observability.PrtgLogger
+	clearCaches func()
+}
+
+func NewService(api prtg.PRTGAPI, logger observability.PrtgLogger, clearCaches func()) *Service {
+	return &Service{
+		api:         api,
+		logger:      logger,
+		clearCaches: clearCaches,
+	}
+}
+
+func (s *Service) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
+	if s.clearCaches != nil {
+		s.clearCaches()
+	}
 
 	_, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	d.logger.Debug("Starting health check")
+	s.logger.Debug("Starting health check")
 
-	status, err := d.api.GetStatusList()
+	status, err := s.api.GetStatusList()
 	if err != nil {
-		d.logger.Error("PRTG health check failed", "error", err)
+		s.logger.Error("PRTG health check failed", "error", err)
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
 			Message: fmt.Sprintf("PRTG API error: %s", err.Error()),

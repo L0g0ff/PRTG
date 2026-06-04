@@ -1,4 +1,4 @@
-package plugin
+package schema
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
-type queryModel struct {
+type QueryModel struct {
 	QueryType         string   `json:"queryType"`
 	SensorId          string   `json:"sensorId"`
 	DeviceId          string   `json:"deviceId"`

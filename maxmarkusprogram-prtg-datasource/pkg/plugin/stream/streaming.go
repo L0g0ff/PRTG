@@ -1,4 +1,4 @@
-package plugin
+package stream
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/schema"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
@@ -24,32 +25,32 @@ const (
 	InitialBufferCapacity = 32
 )
 
-func (d *Datasource) SubscribeStream(ctx context.Context, req *backend.SubscribeStreamRequest) (*backend.SubscribeStreamResponse, error) {
-	d.logger.Debug("Subscribe to stream", "path", req.Path)
+func (s *Service) SubscribeStream(ctx context.Context, req *backend.SubscribeStreamRequest) (*backend.SubscribeStreamResponse, error) {
+	s.logger.Debug("Subscribe to stream", "path", req.Path)
 
 	if !strings.HasPrefix(req.Path, "prtg-stream/") {
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
 	}
 
-	var query queryModel
+	var query schema.QueryModel
 	if err := json.Unmarshal(req.Data, &query); err != nil {
-		d.logger.Error("Invalid subscription data", "error", err)
+		s.logger.Error("Invalid subscription data", "error", err)
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusPermissionDenied}, nil
 	}
 
 	if query.SensorId == "" || (len(query.ChannelArray) == 0 && query.Channel == "") {
-		d.logger.Error("Missing required fields", "sensorId", query.SensorId)
+		s.logger.Error("Missing required fields", "sensorId", query.SensorId)
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusPermissionDenied}, nil
 	}
 
 	panelId := fmt.Sprintf("%v", query.PanelID)
-	if panelStreams := d.getStreamsByPanel(panelId); len(panelStreams) >= MaxStreamsPerPanel {
-		d.logger.Warn("Maximum streams reached for panel", "panelId", panelId)
+	if panelStreams := s.getStreamsByPanel(panelId); len(panelStreams) >= MaxStreamsPerPanel {
+		s.logger.Warn("Maximum streams reached for panel", "panelId", panelId)
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusPermissionDenied}, nil
 	}
 
 	if timeRangeInfo, err := extractTimeRangeInfo(req.Data); err == nil {
-		d.logger.Debug("Stream time range",
+		s.logger.Debug("Stream time range",
 			"windowSize", time.Duration(timeRangeInfo.To-timeRangeInfo.From)*time.Millisecond)
 	}
 
@@ -74,12 +75,12 @@ func extractTimeRangeInfo(data []byte) (struct{ From, To int64 }, error) {
 	}, nil
 }
 
-func (d *Datasource) PublishStream(ctx context.Context, req *backend.PublishStreamRequest) (*backend.PublishStreamResponse, error) {
+func (s *Service) PublishStream(ctx context.Context, req *backend.PublishStreamRequest) (*backend.PublishStreamResponse, error) {
 	return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 }
 
-func (d *Datasource) RunStream(ctx context.Context, req *backend.RunStreamRequest, sender *backend.StreamSender) error {
-	var query queryModel
+func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, sender *backend.StreamSender) error {
+	var query schema.QueryModel
 	if err := json.Unmarshal(req.Data, &query); err != nil {
 		return fmt.Errorf("failed to parse stream data: %w", err)
 	}
@@ -102,21 +103,21 @@ func (d *Datasource) RunStream(ctx context.Context, req *backend.RunStreamReques
 	stream := createStream(query, channels, streamID, timeRangeFrom, timeRangeTo,
 		interval, cacheDuration, bufferSize)
 
-	d.logger.Info("Stream starting",
+	s.logger.Info("Stream starting",
 		"streamID", streamID,
 		"intervalMs", interval.Milliseconds())
 
-	if existingStream := d.getExistingStream(streamID); existingStream != nil {
-		d.updateExistingStream(existingStream, timeRangeFrom, timeRangeTo, cacheDuration)
+	if existingStream := s.getExistingStream(streamID); existingStream != nil {
+		s.updateExistingStream(existingStream, timeRangeFrom, timeRangeTo, cacheDuration)
 		return nil
 	}
 
-	d.registerNewStream(stream, streamID)
+	s.registerNewStream(stream, streamID)
 
-	return d.runStreamLoop(ctx, stream, query, sender, timeRangeFrom, timeRangeTo)
+	return s.runStreamLoop(ctx, stream, query, sender, timeRangeFrom, timeRangeTo)
 }
 
-func getChannels(query queryModel) []string {
+func getChannels(query schema.QueryModel) []string {
 	if len(query.ChannelArray) > 0 {
 		return query.ChannelArray
 	}
@@ -141,7 +142,7 @@ func getBoundedInterval(requestedInterval int64) time.Duration {
 	return interval
 }
 
-func generateStreamID(query queryModel, channels []string) string {
+func generateStreamID(query schema.QueryModel, channels []string) string {
 	channelKey := strings.Join(channels, "_")
 	return fmt.Sprintf("%v_%s_%s_%s",
 		query.PanelID,
@@ -150,7 +151,7 @@ func generateStreamID(query queryModel, channels []string) string {
 		channelKey)
 }
 
-func getTimeRange(query queryModel) (time.Time, time.Time) {
+func getTimeRange(query schema.QueryModel) (time.Time, time.Time) {
 	now := time.Now()
 	if query.From > 0 && query.To > 0 {
 		return time.Unix(0, query.From*int64(time.Millisecond)),
@@ -159,7 +160,7 @@ func getTimeRange(query queryModel) (time.Time, time.Time) {
 	return now.Add(-30 * time.Minute), now
 }
 
-func getCacheDuration(query queryModel) time.Duration {
+func getCacheDuration(query schema.QueryModel) time.Duration {
 	if query.StreamInterval > 0 {
 		cacheDuration := time.Duration(query.StreamInterval/2) * time.Millisecond
 		if cacheDuration < time.Second {
@@ -170,11 +171,11 @@ func getCacheDuration(query queryModel) time.Duration {
 	return DefaultCacheTime
 }
 
-func getBufferSize(_ queryModel) int64 {
+func getBufferSize(_ schema.QueryModel) int64 {
 	return DefaultBufferSize
 }
 
-func createStream(query queryModel, channels []string, streamID string,
+func createStream(query schema.QueryModel, channels []string, streamID string,
 	fromTime, toTime time.Time, interval, cacheDuration time.Duration, bufferSize int64) *activeStream {
 
 	stream := &activeStream{

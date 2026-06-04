@@ -1,4 +1,4 @@
-package plugin
+package resource
 
 import (
 	"encoding/json"
@@ -6,75 +6,96 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/observability"
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/prtg"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
 const MaxQueueSize = 100
 
-var (
-	requestQueue = make([]*ResourceRequest, 0)
+type Service struct {
+	api          prtg.PRTGAPI
+	logger       observability.PrtgLogger
+	tracer       *observability.Tracer
+	metrics      *observability.Metrics
+	requestQueue []*ResourceRequest
 	queueLock    sync.Mutex
-)
+}
+
+func NewService(
+	api prtg.PRTGAPI,
+	logger observability.PrtgLogger,
+	tracer *observability.Tracer,
+	metrics *observability.Metrics,
+) *Service {
+	return &Service{
+		api:          api,
+		logger:       logger,
+		tracer:       tracer,
+		metrics:      metrics,
+		requestQueue: make([]*ResourceRequest, 0),
+	}
+}
 
 type ResourceRequest struct {
 	Request *backend.CallResourceRequest
 	Sender  backend.CallResourceResponseSender
 }
 
-func (d *Datasource) processQueuedRequests() error {
-	queueLock.Lock()
-	defer queueLock.Unlock()
+func (s *Service) processQueuedRequests() error {
+	s.queueLock.Lock()
+	defer s.queueLock.Unlock()
 
-	if len(requestQueue) == 0 {
+	if len(s.requestQueue) == 0 {
 		return nil
 	}
 
-	if len(requestQueue) > MaxQueueSize {
-		d.logger.Warn("Request queue overflow, dropping old requests")
-		requestQueue = requestQueue[len(requestQueue)-MaxQueueSize:]
+	if len(s.requestQueue) > MaxQueueSize {
+		s.logger.Warn("Request queue overflow, dropping old requests")
+		s.requestQueue = s.requestQueue[len(s.requestQueue)-MaxQueueSize:]
 	}
 
 	var lastError error
-	for _, req := range requestQueue {
-		err := d.processRequest(req)
+	for _, req := range s.requestQueue {
+		err := s.processRequest(req)
 		if err != nil {
-			d.logger.Error("Failed to process request", "error", err)
+			s.logger.Error("Failed to process request", "error", err)
 			lastError = err
 		}
 	}
 
-	requestQueue = requestQueue[:0]
+	s.requestQueue = s.requestQueue[:0]
 	return lastError
 }
 
-func (d *Datasource) processRequest(req *ResourceRequest) error {
+func (s *Service) processRequest(req *ResourceRequest) error {
 	path := req.Request.Path
-	d.logger.Debug("Processing request", "path", path)
+	s.logger.Debug("Processing request", "path", path)
 
 	switch {
 	case strings.HasPrefix(path, "groups"):
-		return d.handleGetGroups(req.Sender)
+		return s.handleGetGroups(req.Sender)
 
 	case strings.HasPrefix(path, "devices/"):
 		pathParts := strings.Split(path, "/")
 		if len(pathParts) < 2 {
 			return sendErrorResponse(req.Sender, "group parameter is required", http.StatusBadRequest)
 		}
-		return d.handleGetDevices(req.Sender, pathParts[1])
+		return s.handleGetDevices(req.Sender, pathParts[1])
 
 	case strings.HasPrefix(path, "sensors/"):
 		pathParts := strings.Split(path, "/")
 		if len(pathParts) < 2 {
 			return sendErrorResponse(req.Sender, "device parameter is required", http.StatusBadRequest)
 		}
-		return d.handleGetSensors(req.Sender, pathParts[1])
+		return s.handleGetSensors(req.Sender, pathParts[1])
 
 	case strings.HasPrefix(path, "channels/"):
 		pathParts := strings.Split(path, "/")
 		if len(pathParts) < 2 {
 			return sendErrorResponse(req.Sender, "sensor parameter is required", http.StatusBadRequest)
 		}
-		return d.handleGetChannel(req.Sender, pathParts[1])
+		return s.handleGetChannel(req.Sender, pathParts[1])
 
 	default:
 		return sendErrorResponse(req.Sender, "invalid API endpoint", http.StatusNotFound)

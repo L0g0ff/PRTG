@@ -1,4 +1,4 @@
-package plugin
+package query
 
 import (
 	"context"
@@ -8,18 +8,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/prtgtime"
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/schema"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
 
-func (d *Datasource) handlePropertyQuery(ctx context.Context, qm queryModel, property, filterProperty string, baseFrameName string) backend.DataResponse {
-	ctx, span := d.tracer.StartSpan(ctx, "handlePropertyQuery")
+func (s *Service) handlePropertyQuery(ctx context.Context, qm schema.QueryModel, property, filterProperty string, baseFrameName string) backend.DataResponse {
+	ctx, span := s.tracer.StartSpan(ctx, "handlePropertyQuery")
 	backend.Logger.Info("Context", "ctx", ctx)
 	defer span.End()
 
-	d.logger.Debug("Processing property query",
+	s.logger.Debug("Processing property query",
 		"property", property,
 		"filterProperty", filterProperty,
 	)
@@ -27,7 +29,7 @@ func (d *Datasource) handlePropertyQuery(ctx context.Context, qm queryModel, pro
 	isRawMode := qm.QueryType == "raw"
 	if isRawMode && !strings.HasSuffix(filterProperty, "_raw") {
 		filterProperty += "_raw"
-		d.logger.Debug("Converting to raw property",
+		s.logger.Debug("Converting to raw property",
 			"original", property,
 			"rawProperty", filterProperty,
 		)
@@ -38,13 +40,13 @@ func (d *Datasource) handlePropertyQuery(ctx context.Context, qm queryModel, pro
 
 	switch property {
 	case "group":
-		groups, err := d.api.GetGroups()
+		groups, err := s.api.GetGroups()
 		if err != nil {
 			return backend.ErrDataResponse(backend.StatusBadRequest, fmt.Sprintf("API request failed: %v", err))
 		}
 		for _, g := range groups.Groups {
 			if g.Group == qm.Group {
-				timestamp, _, err := parsePRTGDateTime(g.Datetime)
+				timestamp, _, err := prtgtime.ParseDateTime(g.Datetime)
 				if err != nil {
 					continue
 				}
@@ -73,13 +75,13 @@ func (d *Datasource) handlePropertyQuery(ctx context.Context, qm queryModel, pro
 		if qm.Group == "" {
 			return backend.ErrDataResponse(backend.StatusBadRequest, "group parameter is required for device query")
 		}
-		devices, err := d.api.GetDevices(qm.Group)
+		devices, err := s.api.GetDevices(qm.Group)
 		if err != nil {
 			return backend.ErrDataResponse(backend.StatusBadRequest, fmt.Sprintf("API request failed: %v", err))
 		}
 		for _, dev := range devices.Devices {
 			if dev.Device == qm.Device {
-				timestamp, _, err := parsePRTGDateTime(dev.Datetime)
+				timestamp, _, err := prtgtime.ParseDateTime(dev.Datetime)
 				if err != nil {
 					continue
 				}
@@ -119,14 +121,14 @@ func (d *Datasource) handlePropertyQuery(ctx context.Context, qm queryModel, pro
 		if qm.Device == "" {
 			return backend.ErrDataResponse(backend.StatusBadRequest, "device parameter is required for sensor query")
 		}
-		sensors, err := d.api.GetSensors(qm.Device)
+		sensors, err := s.api.GetSensors(qm.Device)
 		if err != nil {
 			return backend.ErrDataResponse(backend.StatusBadRequest, fmt.Sprintf("API request failed: %v", err))
 		}
 
 		for _, s := range sensors.Sensors {
 			if s.Sensor == qm.Sensor {
-				timestamp, _, err := parsePRTGDateTime(s.Datetime)
+				timestamp, _, err := prtgtime.ParseDateTime(s.Datetime)
 				if err != nil {
 					continue
 				}
@@ -236,7 +238,7 @@ func createPropertyFrameWithDisplayName(times []time.Time, values []interface{},
 	return data.NewFrame(frameName, timeField, valueField)
 }
 
-func (d *Datasource) GetPropertyValue(property string, item interface{}) string {
+func (s *Service) GetPropertyValue(property string, item interface{}) string {
 	v := reflect.ValueOf(item)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()

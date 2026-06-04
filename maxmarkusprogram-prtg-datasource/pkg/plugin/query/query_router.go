@@ -1,4 +1,4 @@
-package plugin
+package query
 
 import (
 	"context"
@@ -7,26 +7,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin/schema"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/experimental/concurrent"
 )
 
 const MaxConcurrentQueries = 10
 
-func (d *Datasource) handleSingleQueryData(ctx context.Context, q concurrent.Query) backend.DataResponse {
-	ctx, span := d.tracer.StartSpan(ctx, "handleSingleQueryData")
+func (s *Service) handleSingleQueryData(ctx context.Context, q concurrent.Query) backend.DataResponse {
+	ctx, span := s.tracer.StartSpan(ctx, "handleSingleQueryData")
 	defer span.End()
 
 	start := time.Now()
-	d.logger.Debug("Processing concurrent query",
+	s.logger.Debug("Processing concurrent query",
 		"refId", q.DataQuery.RefID,
 	)
 
-	res := d.query(ctx, q.PluginContext, q.DataQuery)
+	res := s.query(ctx, q.PluginContext, q.DataQuery)
 
 	duration := time.Since(start)
-	d.metrics.ObserveQueryDuration("single_query", duration.Seconds())
-	d.logger.Debug("Concurrent query processed",
+	s.metrics.ObserveQueryDuration("single_query", duration.Seconds())
+	s.logger.Debug("Concurrent query processed",
 		"refId", q.DataQuery.RefID,
 		"duration", duration,
 		"status", res.Status,
@@ -48,7 +49,7 @@ func generateCacheKey(req *backend.QueryDataRequest) string {
 	return keyBuilder.String()
 }
 
-func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
 	if len(req.Queries) == 0 {
 		return &backend.QueryDataResponse{
 			Responses: make(map[string]backend.DataResponse),
@@ -67,39 +68,39 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 	}
 
 	cacheKey := generateCacheKey(req)
-	d.cacheMutex.RLock()
-	if cached, exists := d.queryCache[cacheKey]; exists && time.Now().Before(cached.ValidUntil) {
-		d.cacheMutex.RUnlock()
+	s.cacheMutex.RLock()
+	if cached, exists := s.queryCache[cacheKey]; exists && time.Now().Before(cached.ValidUntil) {
+		s.cacheMutex.RUnlock()
 		response := backend.NewQueryDataResponse()
 		response.Responses[req.Queries[0].RefID] = cached.Response
 		return response, nil
 	}
-	d.cacheMutex.RUnlock()
+	s.cacheMutex.RUnlock()
 
-	response, err := d.mux.QueryData(ctx, req)
+	response, err := s.mux.QueryData(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	d.cacheMutex.Lock()
-	d.queryCache[cacheKey] = &QueryCacheEntry{
+	s.cacheMutex.Lock()
+	s.queryCache[cacheKey] = &schema.QueryCacheEntry{
 		Response:   response.Responses[req.Queries[0].RefID],
-		ValidUntil: time.Now().Add(d.cacheTime),
+		ValidUntil: time.Now().Add(s.cacheTime),
 		Updating:   false,
 	}
-	d.cacheMutex.Unlock()
+	s.cacheMutex.Unlock()
 
 	return response, nil
 }
 
-func (d *Datasource) handleMetricsQueryType(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	ctx, span := d.tracer.StartSpan(ctx, "handleMetricsQueryType")
+func (s *Service) handleMetricsQueryType(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	ctx, span := s.tracer.StartSpan(ctx, "handleMetricsQueryType")
 	defer span.End()
 
 	response := backend.NewQueryDataResponse()
 
 	for _, q := range req.Queries {
-		response.Responses[q.RefID] = d.handleSingleQueryData(ctx, concurrent.Query{
+		response.Responses[q.RefID] = s.handleSingleQueryData(ctx, concurrent.Query{
 			DataQuery:     q,
 			PluginContext: req.PluginContext,
 		})
@@ -108,39 +109,39 @@ func (d *Datasource) handleMetricsQueryType(ctx context.Context, req *backend.Qu
 	return response, nil
 }
 
-func (d *Datasource) handleManualQueryType(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	_, span := d.tracer.StartSpan(ctx, "handleManualQueryType")
+func (s *Service) handleManualQueryType(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	_, span := s.tracer.StartSpan(ctx, "handleManualQueryType")
 	defer span.End()
 
 	response := backend.NewQueryDataResponse()
 
 	for _, q := range req.Queries {
-		var qm queryModel
+		var qm schema.QueryModel
 		if err := json.Unmarshal(q.JSON, &qm); err != nil {
 			response.Responses[q.RefID] = backend.ErrDataResponse(backend.StatusBadRequest, "failed to parse query")
 			continue
 		}
 
-		response.Responses[q.RefID] = d.handleManualQuery(qm, q.TimeRange, fmt.Sprintf("manual_%s", q.RefID))
+		response.Responses[q.RefID] = s.handleManualQuery(qm, q.TimeRange, fmt.Sprintf("manual_%s", q.RefID))
 	}
 
 	return response, nil
 }
 
-func (d *Datasource) handlePropertyQueryType(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	ctx, span := d.tracer.StartSpan(ctx, "handlePropertyQueryType")
+func (s *Service) handlePropertyQueryType(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	ctx, span := s.tracer.StartSpan(ctx, "handlePropertyQueryType")
 	defer span.End()
 
 	response := backend.NewQueryDataResponse()
 
 	for _, q := range req.Queries {
-		var qm queryModel
+		var qm schema.QueryModel
 		if err := json.Unmarshal(q.JSON, &qm); err != nil {
 			response.Responses[q.RefID] = backend.ErrDataResponse(backend.StatusBadRequest, "failed to parse query")
 			continue
 		}
 
-		response.Responses[q.RefID] = d.handlePropertyQuery(
+		response.Responses[q.RefID] = s.handlePropertyQuery(
 			ctx,
 			qm,
 			qm.Property,
@@ -152,7 +153,7 @@ func (d *Datasource) handlePropertyQueryType(ctx context.Context, req *backend.Q
 	return response, nil
 }
 
-func (d *Datasource) handleQueryFallback(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	d.logger.Warn("Query type not supported", "queries", len(req.Queries))
+func (s *Service) handleQueryFallback(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	s.logger.Warn("Query type not supported", "queries", len(req.Queries))
 	return backend.NewQueryDataResponse(), nil
 }
