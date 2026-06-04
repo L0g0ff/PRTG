@@ -202,7 +202,7 @@ jobs:
         if: ${{ always() && !cancelled() }}
         with:
           upload-report: false
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
           test-outcome: ${{ steps.run-tests.outcome }}
 
       - name: Docker logs
@@ -238,4 +238,4 @@ jobs:
       - name: Publish report
         uses: grafana/plugin-actions/playwright-gh-pages/deploy-report-pages@main # zizmor: ignore[unpinned-uses] provided by grafana
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}

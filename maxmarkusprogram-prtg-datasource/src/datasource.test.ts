@@ -1,6 +1,6 @@
 import { DataFrame, DataQueryRequest, DataSourceInstanceSettings } from '@grafana/data';
 import { getTemplateSrv, getGrafanaLiveSrv } from '@grafana/runtime';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 import { DataSource } from './datasource';
 import { MyQuery, MyDataSourceOptions, QueryType } from './types';
 import pluginJson from './plugin.json';
@@ -71,6 +71,10 @@ describe('DataSource', () => {
         dataSource = new DataSource(mockSettings);
     });
 
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     it('should create instance', () => {
         expect(dataSource).toBeDefined();
     });
@@ -81,6 +85,10 @@ describe('DataSource', () => {
             QueryEditor: undefined,
             processEvents: expect.any(Function),
         });
+    });
+
+    it('should advertise streaming data source support', () => {
+        expect(pluginJson.streaming).toBe(true);
     });
 
     it('should convert query frames to annotation events', async () => {
@@ -194,5 +202,60 @@ describe('DataSource', () => {
         const result = dataSource.query(mockRequest);
         expect(result).toBeDefined();
         expect(result).toBe(mockResponse);
+    });
+
+    it('should route streaming metric queries through Grafana Live', async () => {
+        mockLiveSrv.getDataStream.mockReturnValue(of({ data: [] }));
+
+        const mockRequest: DataQueryRequest<MyQuery> = {
+            requestId: 'stream-test',
+            interval: '1s',
+            intervalMs: 1000,
+            range: {
+                from: { valueOf: () => 1000 } as any,
+                to: { valueOf: () => 2000 } as any,
+                raw: { from: 'now-1m', to: 'now' }
+            },
+            scopedVars: {},
+            targets: [
+                createMockQuery({
+                    refId: 'A',
+                    sensorId: '1025',
+                    channel: 'Total',
+                    channelArray: ['Total'],
+                    isStreaming: true,
+                    streamInterval: 2500,
+                    updateMode: 'append',
+                }),
+            ],
+            timezone: 'UTC',
+            app: 'dashboard',
+            startTime: Date.now(),
+            panelId: 7
+        };
+
+        await firstValueFrom(DataSource.prototype.query.call(dataSource, mockRequest));
+
+        expect(mockLiveSrv.getDataStream).toHaveBeenCalledWith({
+            addr: expect.objectContaining({
+                namespace: 'test-uid',
+                path: 'prtg-stream/7_A_1025_Total',
+                data: expect.objectContaining({
+                    sensorId: '1025',
+                    channel: 'Total',
+                    channelArray: ['Total'],
+                    isStreaming: true,
+                    streamInterval: 2500,
+                    streamId: '7_A_1025_Total',
+                    panelId: '7',
+                    queryId: 'A',
+                    timeRange: {
+                        from: 1000,
+                        to: 2000,
+                    },
+                    updateMode: 'append',
+                }),
+            }),
+        });
     });
 });
