@@ -4,6 +4,7 @@
  * In order to extend the configuration follow the steps in
  * https://grafana.com/developers/plugin-tools/get-started/set-up-development-environment#extend-the-webpack-config
  */
+/// <reference path="../types/webpack-plugins.d.ts" />
 
 import CopyWebpackPlugin from 'copy-webpack-plugin';
 import ESLintPlugin from 'eslint-webpack-plugin';

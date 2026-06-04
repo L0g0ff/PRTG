@@ -3,9 +3,11 @@ package main
 import (
 	"os"
 
+	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
-	"github.com/1DeliDolu/PRTG/maxmarkusprogram-prtg-datasource/pkg/plugin"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 func main() {
@@ -17,7 +19,14 @@ func main() {
 	// from Grafana to create different instances of SampleDatasource (per datasource
 	// ID). When datasource configuration changed Dispose method will be called and
 	// new datasource instance created using NewSampleDatasource factory.
-	if err := datasource.Manage("maxmarkusprogram-prtg-datasource", plugin.NewDatasource, datasource.ManageOpts{}); err != nil {
+	if err := datasource.Manage("maxmarkusprogram-prtg-datasource", plugin.NewDatasource, datasource.ManageOpts{
+		TracingOpts: tracing.Opts{
+			CustomAttributes: []attribute.KeyValue{
+				attribute.String("prtg.plugin_id", "maxmarkusprogram-prtg-datasource"),
+				attribute.String("prtg.backend", "datasource"),
+			},
+		},
+	}); err != nil {
 		log.DefaultLogger.Error(err.Error())
 		os.Exit(1)
 	}

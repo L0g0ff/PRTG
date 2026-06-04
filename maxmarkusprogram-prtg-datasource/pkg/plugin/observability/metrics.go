@@ -22,11 +22,13 @@ var (
 
 /* =================================== METRICS STRUCT ======================================== */
 type Metrics struct {
-	apiRequests   *prometheus.CounterVec
-	apiLatency    *prometheus.HistogramVec
-	queryDuration *prometheus.HistogramVec
-	cacheHits     *prometheus.CounterVec
-	errorCounter  *prometheus.CounterVec
+	apiRequests      *prometheus.CounterVec
+	apiLatency       *prometheus.HistogramVec
+	queryDuration    *prometheus.HistogramVec
+	cacheHits        *prometheus.CounterVec
+	errorCounter     *prometheus.CounterVec
+	endpointRequests *prometheus.CounterVec
+	queriesTotal     *prometheus.CounterVec
 }
 
 func NewMetrics(reg prometheus.Registerer) *Metrics {
@@ -70,6 +72,22 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			},
 			[]string{"type"},
 		),
+		endpointRequests: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "grafana_plugin",
+				Name:      "prtg_endpoint_requests_total",
+				Help:      "Total number of PRTG plugin backend endpoint requests.",
+			},
+			[]string{"endpoint", "status"},
+		),
+		queriesTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "grafana_plugin",
+				Name:      "prtg_queries_total",
+				Help:      "Total number of PRTG queries.",
+			},
+			[]string{"query_type"},
+		),
 	}
 
 	m.apiRequests = registerCounterVec(reg, m.apiRequests)
@@ -77,6 +95,8 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	m.queryDuration = registerHistogramVec(reg, m.queryDuration)
 	m.cacheHits = registerCounterVec(reg, m.cacheHits)
 	m.errorCounter = registerCounterVec(reg, m.errorCounter)
+	m.endpointRequests = registerCounterVec(reg, m.endpointRequests)
+	m.queriesTotal = registerCounterVec(reg, m.queriesTotal)
 
 	return m
 }
@@ -130,6 +150,14 @@ func (m *Metrics) IncCacheHit(type_ string) {
 
 func (m *Metrics) IncError(type_ string) {
 	m.errorCounter.WithLabelValues(type_).Inc()
+}
+
+func (m *Metrics) IncEndpointRequest(endpoint string, status string) {
+	m.endpointRequests.WithLabelValues(endpoint, status).Inc()
+}
+
+func (m *Metrics) IncQuery(queryType string) {
+	m.queriesTotal.WithLabelValues(queryType).Inc()
 }
 
 // Add this method to the Metrics struct

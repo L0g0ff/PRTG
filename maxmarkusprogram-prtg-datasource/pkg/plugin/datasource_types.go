@@ -12,6 +12,8 @@ import (
 type Datasource struct {
 	api      prtg.PRTGAPI
 	logger   observability.PrtgLogger
+	tracer   *observability.Tracer
+	metrics  *observability.Metrics
 	query    *query.Service
 	resource *resource.Service
 	stream   *stream.Service

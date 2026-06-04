@@ -47,9 +47,11 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	queryService := querysvc.NewService(api, logger, tracer, metrics, cacheTime)
 
 	ds := &Datasource{
-		api:    api,
-		logger: logger,
-		query:  queryService,
+		api:     api,
+		logger:  logger,
+		tracer:  tracer,
+		metrics: metrics,
+		query:   queryService,
 	}
 	ds.resource = resourcesvc.NewService(api, logger, tracer, metrics)
 	ds.stream = streamsvc.NewService(logger, queryService, cacheTime)

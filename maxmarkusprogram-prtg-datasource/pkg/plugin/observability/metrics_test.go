@@ -27,4 +27,10 @@ func TestNewMetricsReusesRegisteredCollectors(t *testing.T) {
 	if first.errorCounter != second.errorCounter {
 		t.Fatal("expected errorCounter collector to be reused")
 	}
+	if first.endpointRequests != second.endpointRequests {
+		t.Fatal("expected endpointRequests collector to be reused")
+	}
+	if first.queriesTotal != second.queriesTotal {
+		t.Fatal("expected queriesTotal collector to be reused")
+	}
 }

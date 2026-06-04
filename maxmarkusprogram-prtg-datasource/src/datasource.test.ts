@@ -1,7 +1,9 @@
-import { DataQueryRequest, DataSourceInstanceSettings } from '@grafana/data';
+import { DataFrame, DataQueryRequest, DataSourceInstanceSettings } from '@grafana/data';
 import { getTemplateSrv, getGrafanaLiveSrv } from '@grafana/runtime';
+import { firstValueFrom } from 'rxjs';
 import { DataSource } from './datasource';
 import { MyQuery, MyDataSourceOptions, QueryType } from './types';
+import pluginJson from './plugin.json';
 
 jest.mock('@grafana/runtime', () => ({
     getTemplateSrv: jest.fn(),
@@ -71,6 +73,38 @@ describe('DataSource', () => {
 
     it('should create instance', () => {
         expect(dataSource).toBeDefined();
+    });
+
+    it('should advertise annotation query support', () => {
+        expect(pluginJson.annotations).toBe(true);
+        expect(dataSource.annotations).toEqual({
+            QueryEditor: undefined,
+            processEvents: expect.any(Function),
+        });
+    });
+
+    it('should convert query frames to annotation events', async () => {
+        const frame: DataFrame = {
+            name: 'CPU Load',
+            fields: [
+                { name: 'Time', values: [1000, 2000] },
+                { name: 'Value', values: [42, 45] },
+            ],
+            length: 2,
+        } as DataFrame;
+
+        const events = await firstValueFrom(dataSource.annotations.processEvents({ panelId: 7 }, [frame]));
+
+        expect(events).toEqual([
+            {
+                time: 1000,
+                timeEnd: 2000,
+                title: 'CPU Load',
+                text: 'Value: 42',
+                tags: ['prtg', 'value:42', 'source:CPU Load'],
+                panelId: 7,
+            },
+        ]);
     });
 
     it('should handle template variables', () => {

@@ -2,7 +2,7 @@
   "compilerOptions": {
       "alwaysStrict": true,
       "declaration": false,
-      "rootDir": "src",
+      "rootDir": ".",
       "target": "ES2020",
       "lib": [
         "dom",
@@ -10,6 +10,7 @@
         "es2020"
       ],
       "allowJs": true,
+      "allowImportingTsExtensions": true,
       "skipLibCheck": true,
       "esModuleInterop": true,
       "allowSyntheticDefaultImports": true,
@@ -18,9 +19,6 @@
       "importHelpers": true,
       "module": "esnext",
       "moduleResolution": "bundler",
-      "typeRoots": [
-        "node_modules/@types"
-      ],
       "resolveJsonModule": true,
       "ignoreDeprecations": "5.0",
       "isolatedModules": true,
@@ -31,7 +29,9 @@
       "noUnusedParameters": false 
     },
     "include": [
-      "src"
+      "src",
+      ".config/types/**/*.d.ts",
+      ".config/webpack/**/*.ts"
     ],
   "exclude": [
     "node_modules"
