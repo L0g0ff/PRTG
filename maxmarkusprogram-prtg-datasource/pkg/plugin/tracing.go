@@ -28,7 +28,6 @@ func (t *Tracer) AddAttribute(span trace.Span, key string, value interface{}) {
 	span.SetAttributes(attribute.String(key, fmt.Sprintf("%v", value)))
 }
 
-
 // recordError adds error details to a span
 func recordError(span trace.Span, err error, message string) {
 	span.RecordError(err)
