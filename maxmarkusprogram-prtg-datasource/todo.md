@@ -1,18 +1,207 @@
-# "
+# Plugin publishing best practices
 
-## First of all: thank you!
+When publishing a Grafana plugin, follow best practices to ensure a smooth submission, review process, and a higher quality experience for users. Whether you’re fine-tuning your plugin’s functionality or preparing your documentation, by following established guidelines you improve the plugin’s performance, security, and discoverability within the Grafana ecosystem.
 
-This plugin is exactly what the PRTG + Grafana community has been missing. The work you've put into building a proper backend plugin with Go, caching, and all the different query types is really impressive. Thank you for making this available!
+The recommendations in this document will help you avoid common pitfalls, streamline the review process, and create a plugin that integrates seamlessly into users' workflows.
 
----
+caution
 
-## Feature request
+The Grafana Plugins team studies each plugin submission individually and approves any given plugin on a case-by-case basis.
 
-The pre-built binaries currently committed to the repository appear to be out of sync with the source code. Users who skip the build step run into issues that don't occur when building from the latest source.
+Following [best practices](https://grafana.com/developers/plugin-tools/publish-a-plugin/publishing-best-practices) or [providing testing information](https://grafana.com/developers/plugin-tools/publish-a-plugin/provide-test-environment) does not guarantee the approval of a submitted plugin.
 
-It would be great if a GitHub Actions pipeline could automatically build the plugin (frontend + backend) and publish the output as release assets on every push to `main`. That way users can grab a ready-to-use zip from the Releases page without needing Go, Node.js, npm or Mage installed locally.
+Refer to [Plugin submission review](https://grafana.com/developers/plugin-tools/publish-a-plugin/publish-a-plugin#plugin-submission-review) for more details.
 
-Thanks again for maintaining this!" 
+## Before you begin
+
+Before you proceed make sure you've done the following:
+
+* [Created your initial plugin](https://grafana.com/developers/plugin-tools/)
+* Reviewed the [best practices for plugin development guide](https://grafana.com/developers/plugin-tools/key-concepts/best-practices)
+* Familiarized yourself with the [plugin signature levels](https://grafana.com/developers/plugin-tools/publish-a-plugin/sign-a-plugin#public-or-private-plugins)
+
+## Populate your plugin's metadata
+
+Use metadata to make your Grafana plugin discoverable and user-friendly. Properly structuring the [metadata in your `plugin.json` file](https://grafana.com/developers/plugin-tools/reference/plugin-json) not only helps users find your plugin in [Grafana’s plugin catalog](https://grafana.com/grafana/plugins/) but also provides essential details about the plugin’s functionality and compatibility.
+
+Focus on these key elements:
+
+**[Plugin name](https://grafana.com/developers/plugin-tools/reference/plugin-json)**
+
+`name`
+
+The name of your plugin must be clear, concise, and descriptive. It's the first point of interaction for potential users, so avoid overly generic or cryptic names. Aim for a name that reflects the plugin’s primary functionality and makes it easy to understand its purpose at a glance.
+
+**[Description](https://grafana.com/developers/plugin-tools/reference/plugin-json#info)**
+
+`info.description`
+
+The description field summarizes what your plugin does and why users should install it. Limit the description to two sentences, highlighting the core functionality and use cases. A well-written description not only informs users, but also contributes to better search results in the catalog.
+
+**[Keywords](https://grafana.com/developers/plugin-tools/reference/plugin-json#info)**
+
+`info.keywords`
+
+Keywords improve the searchability of your plugin within Grafana’s catalog. Choose terms that accurately describe your plugin’s functionality and data types it supports, such as "JSON", "SQL", or "visualization".
+
+caution
+
+Avoid keyword stuffing. Irrelevant keywords are flagged during the review process, potentially delaying publication.
+
+**[Logos](https://grafana.com/developers/plugin-tools/reference/plugin-json#info)**
+
+`info.logos`
+
+Adding logos improves the overall look and feel of your plugin in the plugin catalog, and adds legitimacy and professionalism to your plugin.
+
+**[Screenshots](https://grafana.com/developers/plugin-tools/reference/plugin-json#info)**
+
+`info.screenshots`
+
+Use the screenshots field to provide an array with one or more screenshot images to be displayed in the plugin catalog. Images give users a visual representation of your plugin, and can help them decide if you plugin solves their problem before installing it.
+
+Make sure that your screenshots:
+
+* Show your plugin in action, highlighting its standout features
+* Have a suitable resolution and file type, for example png, jpeg, or gif
+
+**[Sponsorship link](https://grafana.com/developers/plugin-tools/reference/plugin-json#infolinks)**
+
+`info.links`
+
+The sponsorship link provides a way for users to support your work and contribute to its development. It appears in the "Links" section of your plugin's detail page and supports various funding platforms, such as GitHub Sponsors or Patreon.
+
+Example:
+
+```text
+{
+  info: {
+    links: [
+      {
+        name: "sponsorship",
+        url: "https://github.com/sponsors/pluginDeveloper"
+      }
+    ]
+  }
+}
+```
+
+**[Grafana version compatibility](https://grafana.com/developers/plugin-tools/reference/plugin-json#dependencies)**
+
+`dependencies.grafanaDependency`
+
+Specify the minimum Grafana version your plugin is compatible with so that users running different versions of Grafana know whether your plugin will work for them. Be sure to [run end-to-end tests](https://grafana.com/developers/plugin-tools/e2e-test-a-plugin/) to confirm compatibility with releases you support.
+
+## Create a comprehensive README
+
+Your plugin's README file serves as both a first impression and a detailed guide for your users. It's a combination of a storefront advertisement and an instruction manual—showing what your plugin can do, how to install it, and how users can make the most of it within their Grafana instances.
+
+Use the [README template](https://raw.githubusercontent.com/grafana/plugin-tools/main/packages/create-plugin/templates/common/src/README.md), included as part of the plugin structure generated by the `create-plugin` tool, to provide your users with everything they need to confidently use and contribute to your plugin.
+
+The template covers the essential components, and you can add more specific details to help users understand the value and functionality of your plugin, such as:
+
+* **Screenshots or screen captures:** Include screenshots or even video demonstrations so users can quickly grasp the plugin’s capabilities and setup process, giving them confidence to use it effectively.
+* **Dynamic badges:** Badges provide quick information about your plugin, such as the latest release version or whether it has passed security and code checks. Use tools like [shields.io](https://shields.io/) with the Grafana.com API to automatically update these badges whenever you publish a new version, adding transparency and trustworthiness to your plugin.
+* **Contribution guidance:** Maintaining a plugin can be demanding, especially for individual developers. Clearly outline how users can provide feedback and report bugs, and direct potential code contributors to your `contributing.md`. This fosters community involvement and makes it easier to maintain and improve your plugin over time.
+
+## Maintain a detailed changelog
+
+A well-maintained changelog is essential for plugin transparency and helps users understand what's changed between versions. Grafana displays your changelog in the plugin details page so users can evaluate whether to update.
+
+info
+
+Use Grafana's automated changelog generation feature to simplify the process of maintaining your changelog. Learn how in the [Automatically Generate Changelogs](https://grafana.com/developers/plugin-tools/publish-a-plugin/build-automation#generate-changelogs-automatically) guide.
+
+### Changelog best practices
+
+Use a dedicated CHANGELOG.md file in your repository root with the following information:
+
+1. Follow semantic versioning (MAJOR.MINOR.PATCH) and organize entries by version
+2. Date each release to provide chronological context
+3. Group changes by type such as "Features", "Bug Fixes", "Breaking Changes"...
+4. Reference pull requests with links to provide additional context
+5. Highlight breaking changes prominently to alert users of required actions
+
+### Example
+
+```markdown
+### [1.10.0](https://github.com/user/plugin-name/tree/1.10.0) (2025-04-05)
+
+**Implemented enhancements:**
+
+- Add support for dark theme [\#138](https://github.com/user/plugin-name/pull/138) ([username](https://github.com/username))
+- Add ability to customize tooltip formats [\#135](https://github.com/user/plugin-name/pull/135) ([username](https://github.com/username))
+- Support for PostgreSQL data source [\#129](https://github.com/user/plugin-name/pull/129) ([username](https://github.com/username))
+
+**Fixed bugs:**
+
+- Fix panel crash when switching dashboards [\#139](https://github.com/user/plugin-name/pull/139) ([username](https://github.com/username))
+- Fix inconsistent time zone handling [\#134](https://github.com/user/plugin-name/pull/134) ([username](https://github.com/username))
+
+**Closed issues:**
+
+- Documentation needs examples for PostgreSQL queries [\#130](https://github.com/user/plugin-name/issues/130)
+
+**Merged pull requests:**
+
+- Update dependencies to address security vulnerabilities [\#140](https://github.com/user/plugin-name/pull/140) ([username](https://github.com/username))
+
+**Breaking changes:**
+
+- Migrate configuration storage format [\#115](https://github.com/user/plugin-name/pull/115) ([username](https://github.com/username))
+```
+
+With this format your changelog becomes a transparent resource that clearly communicates changes, acknowledges contributions, and provides links to more detailed information. It helps users make informed decisions about updating your plugin and demonstrates your commitment to maintaining a high-quality Grafana plugin.
+
+## End-to-end testing
+
+End-to-end (E2E) testing ensures that your Grafana plugin works correctly across various environments and supported Grafana versions. It replicates real-world usage by testing the plugin in an environment similar to the end-user's setup. Implementing E2E tests helps catch issues before submission, saving time during the review process and ensuring a smoother user experience.
+
+**Key points:**
+
+* **Test compatibility across versions:** Ensure your plugin works seamlessly with various versions of Grafana by setting up E2E tests targeting multiple releases.
+* **Automate testing:** Integrate E2E testing into your continuous integration (CI) pipeline to catch issues early and frequently, reducing potential problems during review.
+
+For a comprehensive guide on setting up E2E tests, refer to our [E2E test a plugin](https://grafana.com/developers/plugin-tools/e2e-test-a-plugin/) documentation.
+
+## Validate your plugin
+
+Before submitting your plugin for review, use the Plugin Validator to check for potential issues that could prevent your plugin from being accepted, such as security vulnerabilities or structural problems.
+
+**Key points:**
+
+* **Run locally or in CI:** You can run the validator locally or integrate it into your CI workflow to automate the validation process. Note, the validator runs automatically during the default release workflow.
+* **Validation reports:** The tool generates a report, highlighting any errors or warnings that need to be addressed before submission.
+
+For more information on using the validator refer to the [Plugin Validator documentation](https://github.com/grafana/plugin-validator).
+
+## Provide a provisioned test environment
+
+Provisioning a test environment for your plugin can significantly reduce the review time and make it easier for others to test and contribute to your plugin. A provisioned environment includes a pre-configured Grafana instance with sample dashboards and data sources that demonstrate your plugin's functionality.
+
+**Key points:**
+
+* **Why provisioning matters:** It ensures that both reviewers and contributors can quickly verify your plugin's behaviour without manual setup, speeding up the review and collaboration process.
+* **Automated setup:** You can provision test environments using Docker to create an out-of-the-box experience that replicates a typical Grafana setup.
+
+To learn more about setting up provisioned environments, check out our [provisioning guide](https://grafana.com/developers/plugin-tools/publish-a-plugin/provide-test-environment).
+
+## Automate releases with GitHub Actions
+
+To streamline your plugin development workflow, automate releases using GitHub Actions. This ensures that your plugin is built, signed, and packaged correctly on each release, reducing human error and expediting the publishing process.
+
+**Key points:**
+
+* **Continuous integration (CI):** Use GitHub Actions to automatically build and test your plugin on every commit or pull request, catching issues early.
+* **Release workflow:** Automate the signing and packaging of your plugin when you're ready to publish, ensuring it meets the necessary criteria for submission to the Grafana plugin catalog.
+
+For more details refer to Grafana's [Automate packaging and signing with GitHub](https://grafana.com/developers/plugin-tools/publish-a-plugin/build-automation) guide.
+
+## Next steps
+
+Follow these best practices to increase the chances of a successful plugin submission. They are designed to ensure that your plugin not only passes our review process but also delivers an exceptional experience for users. Adopting these practices will streamline your workflow and help create plugins that stand out in the Grafana ecosystem.
+
+Once your plugin is ready to be published follow our guide for [submitting your plugin for review](https://grafana.com/developers/plugin-tools/publish-a-plugin/publish-a-plugin). We look forward to seeing what you create!
 
 # Automate the packaging and signing of your plugin with GitHub CI
 
@@ -264,7 +453,6 @@ The generated changelog follows a standardized format that clearly categorizes c
 - Update dependencies for security [\#140](https://github.com/user/plugin-name/pull/140) ([username](https://github.com/username))
 ```
 
-
 # Package a plugin
 
 Package a plugin to organize the plugin code and make it ready for use in your organization. Follow these steps to package the plugin in a ZIP file.
@@ -331,7 +519,6 @@ After you've packaged your plugin, you can proceed to:
 
 * [Publish your plugin](https://grafana.com/developers/plugin-tools/publish-a-plugin/publish-a-plugin) to share it with the world, or
 * [Install a packaged plugin](https://grafana.com/docs/grafana/latest/administration/plugin-management/#install-a-packaged-plugin) by extracting it into your plugin directory.
-
 
 # Sign a plugin
 
@@ -470,3 +657,180 @@ With a *public* plugin, your plugin doesn't have a plugin signature level assign
 With a *private* plugin, you need to add a `rootUrls` flag to the `plugin:sign` command. The `rootUrls` must match the [`root_url`](https://grafana.com/docs/grafana/latest/setup-grafana/configure-grafana#root_url) configuration. For more information, refer to the [Sign a private plugin](https://grafana.com/developers/plugin-tools/publish-a-plugin/sign-a-plugin#sign-a-private-plugin) section.
 
 If you still get this error, make sure that the Access Policy token was generated by a Grafana Cloud account that matches the first part of the plugin ID.
+
+# Publish or update a plugin
+
+You've just built your plugin and now you want to share it with the world!
+
+Publishing your plugin to the [Grafana plugin catalog](https://grafana.com/plugins) makes it easily discoverable by millions of Grafana users. Read on to learn how to manage the lifecycle of a plugin in the catalog, from publishing and updating to potentially deprecating.
+
+## Before you begin
+
+* [Review our guidelines](https://grafana.com/legal/plugins/#plugin-publishing-and-signing-criteria) - Learn about the Grafana Labs criteria for publishing and signing plugins.
+* [Review our publishing best practices](https://grafana.com/developers/plugin-tools/publish-a-plugin/publishing-best-practices) - Ensure your plugin is in the best state it can be before submitting it for review.
+* [Package a plugin](https://grafana.com/developers/plugin-tools/publish-a-plugin/package-a-plugin) - Build the plugin and get it ready to share in the form of a ZIP archive.
+* Refer to [plugin-examples](https://github.com/grafana/grafana-plugin-examples) to review best practices for building your plugin.
+
+**To speed up the time it takes to review your plugin:**
+
+* Check that your plugin is ready for review using the [plugin validator](https://github.com/grafana/plugin-validator).
+* Provide sample dashboards and test data with your repository so that the plugin's functionality can be verified. Use the [provisioning](https://grafana.com/developers/plugin-tools/publish-a-plugin/provide-test-environment) process provided to simplify this step.
+
+## Publish your plugin
+
+Follow these steps to publish your plugin for the first time.
+
+1. [Sign in](https://grafana.com/auth/sign-in) to your Grafana Cloud account. Note that you need to be an administrator for the Grafana Cloud organization being used to publish the plugin.
+2. In the left menu, under Org Settings, click  **My Plugins** .
+3. Click  **Submit New Plugin** . The Create Plugin Submission dialog box appears.
+   ![Submit plugin.](https://grafana.com/developers/plugin-tools/assets/images/plugins-submission-create-080f2482c8361a8c92ef62b79b0319ed.png)
+   Submit plugin.
+4. Enter the information requested by the form.
+   * **OS & Architecture:**
+     * Select **Single** if your plugin archive contains binaries for multiple architectures.
+     * Select **Multiple** if you'd like to submit separate plugin archives for each architecture. This can lead to faster downloads since users can select the specific architecture on which they want to install the plugin.
+   * **URL:** A URL that points to a ZIP archive of your packaged plugin.
+   * **Source code URL:** A URL that points to a public Git repository or ZIP archive of your complete plugin source code.
+   * **SHA1:** The SHA1 hash of the plugin specified by the  **URL** .
+   * **Testing guidance:** An overview covering the installation, configuration, and usage of your plugin.
+   * **Provisioning provided for test environment:** Check this box if you have [configured provisioning](https://grafana.com/developers/plugin-tools/publish-a-plugin/provide-test-environment). If you've done this, rest assured it will be identified during the review, and no additional action is needed on your part.
+   * The remaining questions help us determine the [signature level](https://grafana.com/legal/plugins/#what-are-the-different-classifications-of-plugins) for your plugin.
+5. Click  **Submit** .
+
+### Plugin submission review
+
+After you submit your plugin:
+
+1. The Grafana Plugins team runs an automated validation to make sure it adheres to the Grafana guidelines.
+2. Upon the validation, your submission is placed in a review queue.
+3. A plugin reviewer performs a manual inspection that consists of:
+
+* **Code review** : For quality and security purposes, we review the source code for the plugin.
+* **Tests** : We install your plugin on one of our Grafana instances to test it for basic use.
+* We may ask you to assist us in configuring a test environment for your plugin.
+* We'll use this test environment whenever you submit a plugin update.
+
+note
+
+Following [best practices](https://grafana.com/developers/plugin-tools/publish-a-plugin/publishing-best-practices) or [providing a test environment](https://grafana.com/developers/plugin-tools/publish-a-plugin/provide-test-environment) does not guarantee the approval of a submitted plugin. The Grafana Plugins team studies each submission individually and decides on a case-by-case basis.
+
+## Update your plugin
+
+To update a plugin, follow the same guidance as for [publish your plugin](https://grafana.com/developers/plugin-tools/publish-a-plugin/publish-a-plugin#publish-your-plugin), except in Step 3 where you can now click **Submit Update** for the plugin you want to update.
+
+All plugin submissions, new or updates, go through the same automated and rigorous manual review process. Because we may have a test environment already setup for an existing plugin, plugin update reviews may go faster.
+
+## Deprecate a plugin
+
+If a plugin is no longer relevant or is unable to be maintained, plugin developers can request that the plugin be deprecated and removed from the catalog. Similarly, Grafana Labs may deprecate and delist a plugin as part of curating the catalog and ensuring plugins meet our standards for security, quality and compatibility.
+
+For more information on plugin deprecation and how to request your plugin to be deprecated, refer to the Grafana Labs [Plugin Deprecation Policy](https://grafana.com/legal/plugin-deprecation/).
+
+# Help us test your plugin
+
+note
+
+Providing the Grafana Plugins team with additional test configurations and environments isn't required as part of the plugin submission process, but will speed up the review process. For more details, refer to [Plugin submission review](https://grafana.com/developers/plugin-tools/publish-a-plugin/publish-a-plugin#plugin-submission-review).
+
+Developers often ask us how long it takes to review a plugin for publishing to the Grafana [plugin catalog](https://grafana.com/plugins). Although we [can&#39;t give you an estimate](https://grafana.com/developers/plugin-tools/publish-a-plugin/publish-faqs#how-long-does-it-take-to-review-a-submission), you can help us reduce cycle times.
+
+The most time-consuming task when reviewing a plugin is creating suitable test configurations and environments so we can verify your plugin's behavior. This step often involves several back-and-forth conversations between you, the plugin developer, and us, the review team.
+
+To help us test your plugin and improve the review time, you can add testing resources to your plugin via [provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/#provision-grafana).
+
+## Why provision testing information?
+
+Providing testing context offers several benefits:
+
+* **Faster review times.** If you include provisioning information for your plugin before submission, your wait for the review is much shorter.
+* **Easier reviews.** An out-of-the-box working example allows us to easily experiment with additions to the plugin.
+* **Easier setup for e2e tests.** Provisioned dashboards allow e2e tests to run against specific scenarios across local development and in CI.
+* **Improved clarity.** Provisioned plugins make it easier for tech-savvy users to understand how the plugin works.
+
+## What do we need?
+
+Depending on the type and complexity of your plugin, we require the following resources to test your plugin:
+
+* A simple test JSON dashboard for simple panel or data source plugins.
+* A docker-compose.yml file with all the configuration necessary to have the plugin running.
+* For more complex plugins, we could require access to a test API to thoroughly try out your plugin.
+
+## How to provide test configurations and environments
+
+Provisioning allows you to add resources in a YAML file under a `/provisioning` directory. We can then use those files to test your plugin as you intended it to work, and provide a better and faster review.
+
+Starting in v2.8.0, `create-plugin` generates provisioning capabilities for all plugin types (apps, datasources and panels) and includes a sample dashboard. If you scaffolded your plugin with a previous version of `create-plugin`, you can run a new command to add the missing provisioning files.
+
+### What you need to do
+
+Provision your plugin with the required testing files and setup that can run from scratch without additional manual commands or configuration.
+
+For example:
+
+* Create an example dashboard with your working plugin, export it as a JSON, and put it in your provisioning files. This is required for panel and data source plugins.
+  * If necessary, create a provisioning file for the data source associated with the dashboard.
+* Prepare a docker-compose.yml file with all the necessary services set up to use the plugin.
+  * For example, a data source plugin often requires a service that provides the data and some seed data.
+  * Running Docker compose up from a fresh environment should be enough to make the dashboard example work.
+* Use and update the sample dashboard to continuously verify behavior as part of your development process. If appropriate, configure your plugin so that it can return data.
+
+caution
+
+The Grafana Plugins team studies each plugin submission individually and approves any given plugin on a case-by-case basis.
+
+Following [best practices](https://grafana.com/developers/plugin-tools/publish-a-plugin/publishing-best-practices) or [providing testing information](https://grafana.com/developers/plugin-tools/publish-a-plugin/provide-test-environment) does not guarantee the approval of a submitted plugin.
+
+Refer to [Plugin submission review](https://grafana.com/developers/plugin-tools/publish-a-plugin/publish-a-plugin#plugin-submission-review) for more details.
+
+# Publish a plugin: Frequently asked questions
+
+## Do I need to submit a private plugin?
+
+* No. Please only submit plugins that you wish to make publicly available for the Grafana community.
+
+## How long does it take to review a submission?
+
+* We're not able to give an estimate because each plugin submission is unique, though we're constantly working to improve the time it takes to review a plugin. Providing a [provisioned](https://grafana.com/developers/plugin-tools/publish-a-plugin/provide-test-environment) test environment can drastically speed up your review.
+
+## Can I decide a date when my plugin will be published?
+
+* No. We cannot guarantee specific publishing dates, as plugins are immediately published after a review based on our internal prioritization.
+
+## Can I see metrics of my plugin installs, downloads or usage?
+
+* No. We don't offer this information at the moment to plugin authors.
+
+## How can I update my plugin's catalog page?
+
+* The plugin's catalog page content is extracted from the plugin README file. To update the plugin's catalog page, submit an updated plugin with the new content included in the README file.
+
+## Can I unlist a plugin?
+
+* In the event of a bug, unlisting the plugin from our catalog may be possible in exceptional cases, such as security concerns. However, we don't have control over the instances where the plugin is installed.
+* Also, refer to the Grafana Labs [Plugin Deprecation Policy](https://grafana.com/legal/plugin-deprecation/) to learn more about plugin deprecation.
+
+## Can I distribute my plugin somewhere else other than the Grafana plugin catalog?
+
+* The official method for distributing Grafana plugins is through our catalog. Alternative methods, such as installing private or development plugins on local Grafana instances, are available as per the guidelines provided in [this guide](https://grafana.com/docs/grafana/latest/administration/plugin-management#install-plugin-on-local-grafana).
+
+## Can I still use Angular for a plugin?
+
+* No. We will not accept any new plugin submissions written in Angular. For more information, refer to our [Angular support deprecation documentation](https://grafana.com/docs/grafana/latest/developers/angular_deprecation/).
+
+## Can I submit plugins built with Toolkit?
+
+* The @grafana/toolkit tool is deprecated. Please [migrate to `create-plugin`](https://grafana.com/developers/plugin-tools/migration-guides/migrate-from-toolkit). In the future, we will reject submissions based on @grafana/toolkit as it becomes increasingly out-of-date.
+
+## Do all plugins require signatures?
+
+* All plugins require signatures unless they are in development or being submitted to review for the first time.
+
+## Do plugin signatures expire?
+
+* Plugin signatures do not currently expire.
+
+## What source code URL formats are supported?
+
+* Using a tag or branch: `https://github.com/grafana/clock-panel/tree/v2.1.3`
+* Using a tag or branch and the code is in a subdirectory (important for mono repos): `https://github.com/grafana/clock-panel/tree/v2.1.3/plugin/` (here, the plugin contains the plugin code)
+* Using the latest main or master branch commit: `https://github.com/grafana/clock-panel/` (not recommended, it's better to pass a tag or branch)
