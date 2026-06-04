@@ -1,20 +1,16 @@
-import React, { useEffect, useState, useMemo, useCallback, ChangeEvent, useRef } from 'react';
-import {
-  InlineField,
-  Combobox,
-  Stack,
-  AsyncMultiSelect,
-} from '@grafana/ui';
+import React, { useEffect, useState, useCallback, ChangeEvent, useRef } from 'react';
+import { Stack, type ComboboxOption } from '@grafana/ui';
 import { QueryEditorProps, SelectableValue } from '@grafana/data'
-import type { ComboboxOption } from '@grafana/ui';
 import { DataSource } from '../datasource'
 import {
-  MyDataSourceOptions, MyQuery, queryTypeOptions, QueryType, propertyList, filterPropertyList, manualApiMethods
+  MyDataSourceOptions, MyQuery, QueryType, manualApiMethods
 } from '../types'
 import { DisplayOptions } from './query-editor/DisplayOptions';
 import { ManualQueryOptions } from './query-editor/ManualQueryOptions';
+import { MetricSelection } from './query-editor/MetricSelection';
 import { PropertyOptions } from './query-editor/PropertyOptions';
 import { StreamingOptions } from './query-editor/StreamingOptions';
+import { usePrtgSelectionLists } from './query-editor/hooks/usePrtgSelectionLists';
 
 type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>
 
@@ -39,237 +35,35 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   const [group, setGroup] = useState<string>(query.group || '')
   const [device, setDevice] = useState<string>(query.device || '')
   const [sensor, setSensor] = useState<string>(query.sensor || '')
-  //@ts-ignore
-  const [channel, setChannel] = useState<string>(query.channel || '')
+  const [, setChannel] = useState<string>(query.channel || '')
   const [channelQuery, setChannelQuery] = useState<string[]>(query.channelArray || [])
   const [sensorId, setSensorId] = useState<string>(query.sensorId || '')
   const [manualMethod, setManualMethod] = useState<string>(query.manualMethod || '');
   const [manualObjectId, setManualObjectId] = useState<string>(query.manualObjectId || '');
   const [streamIntervalValue, setStreamIntervalValue] = useState<string>(String(query.streamInterval || 2500));
 
-  const [lists, setLists] = useState({
-    groups: [] as Array<ComboboxOption<string>>,
-    devices: [] as Array<ComboboxOption<string>>,
-    sensors: [] as Array<ComboboxOption<string>>,
-    channels: [] as Array<SelectableValue<string>>,
-    values: [] as Array<SelectableValue<string>>,
-    properties: [] as Array<SelectableValue<string>>,
-    filterProperties: [] as Array<SelectableValue<string>>,
-  })
-
-  const [isLoading, setIsLoading] = useState(false)
-
-
-  /* ================================================== SORT ================================================== */
-  lists.groups.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
-  lists.devices.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
-  lists.sensors.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
-  lists.channels.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
-
-
-  /* ================================================== FETCH GROUPS ================================================== */
-  useEffect(() => {
-    async function fetchGroups() {
-      setIsLoading(true)
-      try {
-        const response = await datasource.getGroups()
-        if (response && Array.isArray(response.groups)) {
-          const groupOptions = response.groups.map((group) => ({
-            label: group.group,
-            value: group.group.toString(),
-          }))
-
-          // Batch state updates to avoid ACT warnings in tests
-          setTimeout(() => {
-            setLists((prev) => ({
-              ...prev,
-              groups: groupOptions,
-            }))
-            setIsLoading(false)
-          }, 0)
-        } else {
-          console.error('Invalid response format:', response)
-          setTimeout(() => {
-            setLists((prev) => ({
-              ...prev,
-              groups: [],
-            }))
-            setIsLoading(false)
-          }, 0)
-        }
-      } catch (error) {
-        console.error('Error fetching groups:', error)
-        setTimeout(() => {
-          setLists((prev) => ({
-            ...prev,
-            groups: [],
-          }))
-          setIsLoading(false)
-        }, 0)
-      }
-    }
-    fetchGroups()
-  }, [datasource])
-  /* ================================================== FETCH DEVICES ================================================== */
-  useEffect(() => {
-    async function fetchDevices() {
-      if (!group) { return };
-
-      setIsLoading(true)
-      try {
-        const response = await datasource.getDevices(group)
-        if (response && Array.isArray(response.devices)) {
-          const filteredDevices = group ? response.devices.filter((device) => device.group === group) : response.devices
-
-          const deviceOptions = filteredDevices.map((device) => ({
-            label: device.device,
-            value: device.device.toString(),
-          }))
-          setLists((prev) => ({
-            ...prev,
-            devices: deviceOptions,
-          }))
-        } else {
-          console.error('Invalid devices response format:', response)
-          setLists((prev) => ({
-            ...prev,
-            devices: [],
-          }))
-        }
-      } catch (error) {
-        console.error('Error fetching devices:', error)
-        setLists((prev) => ({
-          ...prev,
-          devices: [],
-        }))
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchDevices()
-  }, [datasource, group])
-  /* ================================================== FETCH SENSOR ================================================== */
-  useEffect(() => {
-    async function fetchSensors() {
-      if (!device) { return };
-
-      setIsLoading(true)
-      try {
-        const response = await datasource.getSensors(device)
-        if (response && Array.isArray(response.sensors)) {
-          const filteredSensors = device
-            ? response.sensors.filter((sensor) => sensor.device === device)
-            : response.sensors
-          const sensorOptions = filteredSensors.map((sensor) => ({
-            label: sensor.sensor,
-            value: sensor.sensor.toString(),
-          }))
-          setLists((prev) => ({
-            ...prev,
-            sensors: sensorOptions,
-          }))
-        } else {
-          console.error('Invalid sensors response format:', response)
-          setLists((prev) => ({
-            ...prev,
-            sensors: [],
-          }))
-        }
-      } catch (error) {
-        console.error('Error fetching sensors:', error)
-        setLists((prev) => ({
-          ...prev,
-          sensors: [],
-        }))
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchSensors()
-  }, [datasource, device])
-  /* ==================================================  FETCH CHANNEL ==================================================   */
-  useEffect(() => {
-    async function fetchChannels() {
-      if (!sensorId) {
-        setLists((prev) => ({
-          ...prev,
-          channels: [],
-        }));
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        const response = await datasource.getChannels(sensorId);
-        if (!response) {
-          console.error('Empty response received');
-          setLists((prev) => ({
-            ...prev,
-            channels: [],
-          }));
-          return;
-        }
-
-        if (response.values && Array.isArray(response.values) && response.values.length > 0) {
-          const channelData = response.values[0] || {};
-
-          const channelOptions = Object.entries(channelData)
-            .filter(([key]) => key !== 'datetime')
-            .map(([key]) => ({
-              label: key,
-              value: key,
-            }));
-
-          setLists((prev) => ({
-            ...prev,
-            channels: channelOptions,
-          }));
-
-          if (query.channel && channelOptions.some(opt => opt.value === query.channel)) {
-            setChannel(query.channel);
-          }
-        } else {
-          console.warn('No channel data found in response');
-          setLists((prev) => ({
-            ...prev,
-            channels: [],
-          }));
-        }
-
-      } catch (error) {
-        console.error('Error fetching channels:', error);
-        setLists((prev) => ({
-          ...prev,
-          channels: [],
-        }));
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchChannels();
-  }, [datasource, sensorId, query.channel]);
-
-  useEffect(() => {
-    if (isTextMode || isRawMode) {
-      const propertyOptions = propertyList.map((item) => ({
-        label: item.visible_name,
-        value: item.name,
-      }));
-
-      // Filter property options
-      const filterPropertyOptions = filterPropertyList.map((item) => ({
-        label: item.visible_name,
-        value: item.name,
-      }));
-
-      setLists((prev) => ({
-        ...prev,
-        properties: propertyOptions,
-        filterProperties: filterPropertyOptions,
-      }));
-    }
-  }, [isTextMode, isRawMode]);
+  const {
+    lists,
+    setLists,
+    isLoading,
+    groupOptions,
+    deviceOptions,
+    sensorOptions,
+    selectedGroup,
+    selectedDevice,
+    selectedSensor,
+    loadChannelOptions,
+  } = usePrtgSelectionLists({
+    datasource,
+    query,
+    isTextMode,
+    isRawMode,
+    group,
+    device,
+    sensor,
+    sensorId,
+    setChannel,
+  });
   /* ==================================================  INITIAL VALUES  ================================================== */
   useEffect(() => {
     setGroup((prev) => query.group ?? prev);
@@ -335,68 +129,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     }
     return ''
   }, [datasource, device, setSensorId])
-  /* ==================================================  USE MEMO  ==================================================  */
-
-  const groupOptions = useMemo(() => lists.groups, [lists.groups]);
-  const deviceOptions = useMemo(() => lists.devices, [lists.devices]);
-  const sensorOptions = useMemo(() => lists.sensors, [lists.sensors]);
-
-  // Add new memoized selected values
-  const selectedGroup = useMemo(() => {
-    return groupOptions.find(option => option.value === group) || (group ? { label: group, value: group } : null);
-  }, [groupOptions, group]);
-
-  const selectedDevice = useMemo(() => {
-    return deviceOptions.find(option => option.value === device) || (device ? { label: device, value: device } : null);
-  }, [deviceOptions, device]);
-
-  const selectedSensor = useMemo(() => {
-    return sensorOptions.find(option => option.value === sensor) || (sensor ? { label: sensor, value: sensor } : null);
-  }, [sensorOptions, sensor]);
-
-  // Add new loadChannelOptions function with useMemo
-  const loadChannelOptions = useMemo(() => async () => {
-    if (!sensorId) {
-      return [];
-    }
-
-    try {
-      const response = await datasource.getChannels(sensorId);
-
-      if (!response) {
-        console.warn('No response received from getChannels');
-        return [];
-      }
-
-      // Check if response has the expected structure
-      if (typeof response === 'object' && 'values' in response) {
-        const values = response.values;
-        if (!Array.isArray(values) || values.length === 0) {
-          console.warn('No channel values found in response');
-          return [];
-        }
-
-        const channelData = values[0];
-        if (typeof channelData !== 'object') {
-          console.warn('Invalid channel data format');
-          return [];
-        }
-
-        return Object.keys(channelData)
-          .filter(key => key !== 'datetime')
-          .map(key => ({
-            label: key,
-            value: key,
-          }));
-      }
-
-      console.warn('Unexpected response format:', response);
-      return [];
-    } catch (error: any) {
-      console.error('Error loading channels:', error?.message || error);
-      return [];
-    }
-  }, [sensorId, datasource]);
   /* ==================================================  EVENT HANDLERS ==================================================  */
 
   /* ==================================================  QUERY  ==================================================  */
@@ -410,7 +142,9 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   /* ==================================================  ONGROUPCHANGE ==================================================  */
   const onGroupChange = useCallback(async (option: ComboboxOption<string> | null) => {
-    if (!option?.value) return;
+    if (!option?.value) {
+      return;
+    }
 
     const groupObjId = await findGroupId(option.value);
     setGroup(option.value);
@@ -423,11 +157,13 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     onChange(updatedQuery);
     setLists(prev => ({ ...prev, devices: [], sensors: [], channels: [] }));
     runQueryIfChanged();
-  }, [query, onChange, runQueryIfChanged, findGroupId]);
+  }, [query, onChange, runQueryIfChanged, findGroupId, setLists]);
 
   /* ==================================================  ONDEVICECHANGE ================================================= */
   const onDeviceChange = useCallback(async (option: ComboboxOption<string> | null) => {
-    if (!option?.value) return;
+    if (!option?.value) {
+      return;
+    }
 
     const deviceObjId = await findDeviceId(option.value);
 
@@ -440,7 +176,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     onChange(updatedQuery);
     setLists(prev => ({ ...prev, sensors: [], channels: [] }));
     runQueryIfChanged();
-  }, [query, onChange, runQueryIfChanged, findDeviceId]);
+  }, [query, onChange, runQueryIfChanged, findDeviceId, setLists]);
   /* ==================================================  ONSENSORCHANGE ==================================================  */
   const onSensorChange = useCallback(async (option: ComboboxOption<string> | null) => {
     if (!option?.value) {
@@ -461,7 +197,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     onChange(updatedQuery);
 
     runQueryIfChanged();
-  }, [query, onChange, runQueryIfChanged, findSensorObjid]);  /* ==================================================  ONCHANNELCHANGE ==================================================  */
+  }, [query, onChange, runQueryIfChanged, findSensorObjid, setLists]);  /* ==================================================  ONCHANNELCHANGE ==================================================  */
   const onChannelChange = useCallback((values: Array<SelectableValue<string>>) => {
     const selectedChannels = values.map(v => v.value!);
 
@@ -588,81 +324,26 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   /* ================================================== RENDER ================================================== */
   return (
     <Stack direction="column" gap={2}>
-      <Stack direction="row" gap={2}>
-        <Stack direction="column" gap={1}>          <InlineField label="Query Type" labelWidth={20} grow>
-          <Combobox
-            id='query-editor-queryType'
-            options={queryTypeOptions}
-            value={query.queryType}
-            onChange={onQueryTypeChange}
-            width={47}
-          />
-        </InlineField>
-
-          <InlineField label="Group" labelWidth={20} grow>
-            <Combobox
-              id='query-editor-group'
-              loading={isLoading}
-              options={groupOptions}
-              value={selectedGroup}
-              onChange={onGroupChange}
-              width={47}
-              createCustomValue={true}
-              isClearable={true}
-              invalid={!query.queryType}
-              placeholder="Select Group or type '*'"
-            />
-          </InlineField>
-
-          <InlineField label="Device" labelWidth={20} grow>
-            <Combobox
-              id='query-editor-device'
-              loading={!lists.devices.length && !!query.group}
-              options={deviceOptions}
-              value={selectedDevice}
-              onChange={onDeviceChange}
-              width={47}
-              createCustomValue={true}
-              isClearable={true}
-              invalid={!query.group}
-              placeholder="Select Device or type '*'"
-            />
-          </InlineField>
-        </Stack>
-
-        <Stack direction="column" gap={1}>          <InlineField label="Sensor" labelWidth={20} grow>
-          <Combobox
-            id='query-editor-sensor'
-            loading={!lists.sensors.length && !!query.device}
-            options={sensorOptions}
-            value={selectedSensor}
-            onChange={onSensorChange}
-            width={47}
-            createCustomValue={true}
-            isClearable={true}
-            invalid={!query.device}
-            placeholder="Select Sensor or type '*'"
-          />
-        </InlineField><InlineField label="Channel" labelWidth={20} grow>
-            <AsyncMultiSelect
-              id='query-editor-channel'
-              key={sensorId}
-              loadOptions={loadChannelOptions}
-              defaultOptions={true}
-              value={channelQuery.map(c => ({
-                label: c,
-                value: c,
-              }))}
-              onChange={onChannelChange}
-              width={47}
-              placeholder={sensorId ? "Select Channels (multiple allowed)" : "First select a sensor"}
-              isClearable
-              isDisabled={!sensorId}
-              noOptionsMessage="No channels available"
-            />
-          </InlineField>
-        </Stack>
-      </Stack>
+      <MetricSelection
+        query={query}
+        isLoading={isLoading}
+        deviceLoading={!lists.devices.length && !!query.group}
+        sensorLoading={!lists.sensors.length && !!query.device}
+        groupOptions={groupOptions}
+        deviceOptions={deviceOptions}
+        sensorOptions={sensorOptions}
+        selectedGroup={selectedGroup}
+        selectedDevice={selectedDevice}
+        selectedSensor={selectedSensor}
+        sensorId={sensorId}
+        channelQuery={channelQuery}
+        loadChannelOptions={loadChannelOptions}
+        onQueryTypeChange={onQueryTypeChange}
+        onGroupChange={onGroupChange}
+        onDeviceChange={onDeviceChange}
+        onSensorChange={onSensorChange}
+        onChannelChange={onChannelChange}
+      />
 
 
       {/* Show display name options for both Metrics and Streaming */}

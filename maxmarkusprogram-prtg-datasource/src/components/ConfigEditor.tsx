@@ -10,6 +10,7 @@ interface Props extends DataSourcePluginOptionsEditorProps<MyDataSourceOptions, 
 export function ConfigEditor(props: Props) {
   const { onOptionsChange, options } = props;
   const { jsonData, secureJsonFields, secureJsonData } = options;
+  const selectedTimeZone = jsonData.timeZone || (jsonData as { timezone?: string }).timezone || 'UTC';
 
   const onPathChange = (event: ChangeEvent<HTMLInputElement>) => {
     const updatedJsonData = { ...options.jsonData };
@@ -50,15 +51,12 @@ export function ConfigEditor(props: Props) {
     const inputValue = event.target.value;
 
     if (inputValue === '') {
-      // Do not set a default value, just clear the cacheTime
-      delete updatedJsonData.cacheTime;
+      updatedJsonData.cacheTime = 60;
     } else {
       const value = parseInt(inputValue, 10);
-      // Set cache time, ensuring minimum value of 10 seconds
       if (!isNaN(value) && value >= 10) {
         updatedJsonData.cacheTime = value;
       } else {
-        // Don't update for invalid values
         return;
       }
     }
@@ -69,9 +67,7 @@ export function ConfigEditor(props: Props) {
     });
   };
 
-  // Timezone selection handler
   const onTimezoneChange = (selectedOption: { value: string } | null) => {
-    // Update the timezone directly when selection changes
     onOptionsChange({
       ...options,
       jsonData: {
@@ -118,7 +114,7 @@ export function ConfigEditor(props: Props) {
       <InlineField label="Timezone" labelWidth={14} interactive tooltip={'Select the timezone'} required>
         <Combobox
           options={timezoneOptions}
-          value={jsonData.timeZone}
+          value={selectedTimeZone}
           onChange={onTimezoneChange}
           width={60}
         />

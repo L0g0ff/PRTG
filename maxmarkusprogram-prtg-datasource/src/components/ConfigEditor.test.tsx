@@ -200,7 +200,7 @@ describe('ConfigEditor', () => {
             ...defaultProps.options,
             jsonData: {
                 ...defaultProps.options.jsonData,
-                timezone: 'America/New_York',
+                timeZone: 'America/New_York',
             },
         });
     });
@@ -213,7 +213,7 @@ describe('ConfigEditor', () => {
                 jsonData: {
                     path: 'existing.server.com',
                     cacheTime: 180,
-                    timezone: 'America/New_York',
+                    timeZone: 'America/New_York',
                 },
                 secureJsonData: {
                     apiKey: 'existing-key',
