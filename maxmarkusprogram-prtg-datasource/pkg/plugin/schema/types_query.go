@@ -33,6 +33,8 @@ type QueryModel struct {
 	PanelID           int64    `json:"panelId"`
 	IsStreaming       bool     `json:"isStreaming"`
 	StreamInterval    int64    `json:"streamInterval"`
+	CacheTime         int64    `json:"cacheTime"`
+	BufferSize        int64    `json:"bufferSize"`
 	UpdateMode        string   `json:"updateMode"`
 	RefID             string   `json:"refId"`
 }

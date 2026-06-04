@@ -3,7 +3,7 @@ import { Stack, type ComboboxOption } from '@grafana/ui';
 import { QueryEditorProps, SelectableValue } from '@grafana/data'
 import { DataSource } from '../datasource'
 import {
-  MyDataSourceOptions, MyQuery, QueryType, manualApiMethods
+  DEFAULT_STREAMING_OPTIONS, MyDataSourceOptions, MyQuery, QueryType, manualApiMethods
 } from '../types'
 import { DisplayOptions } from './query-editor/DisplayOptions';
 import { ManualQueryOptions } from './query-editor/ManualQueryOptions';
@@ -296,11 +296,14 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   const onStreamingToggle = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const isStreaming = event.currentTarget.checked;
-    const streamInterval = isStreaming ? (query.streamInterval || 2500) : undefined;
+    const streamInterval = isStreaming ? (query.streamInterval || DEFAULT_STREAMING_OPTIONS.defaultInterval) : undefined;
     const updatedQuery = {
       ...query,
       isStreaming,
       streamInterval,
+      updateMode: isStreaming ? DEFAULT_STREAMING_OPTIONS.updateMode : query.updateMode,
+      bufferSize: isStreaming ? (query.bufferSize || DEFAULT_STREAMING_OPTIONS.bufferSize) : query.bufferSize,
+      cacheTime: isStreaming ? (query.cacheTime || DEFAULT_STREAMING_OPTIONS.cacheTime) : query.cacheTime,
     };
     onChange(updatedQuery);
     runQueryIfChanged();

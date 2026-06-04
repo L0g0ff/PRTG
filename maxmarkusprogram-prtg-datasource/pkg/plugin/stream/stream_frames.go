@@ -2,6 +2,7 @@ package stream
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,25 @@ func extractChannelName(frame *data.Frame) string {
 	return ""
 }
 
+func extractFieldChannelName(frame *data.Frame, fieldIndex int) string {
+	if fieldIndex <= 0 || fieldIndex >= len(frame.Fields) {
+		return ""
+	}
+
+	field := frame.Fields[fieldIndex]
+	if field.Config != nil && field.Config.Custom != nil {
+		if channel, exists := field.Config.Custom["channel"]; exists {
+			return fmt.Sprint(channel)
+		}
+	}
+
+	if len(frame.Fields) == 2 {
+		return extractChannelName(frame)
+	}
+
+	return field.Name
+}
+
 func extractFrameData(frame *data.Frame) ([]time.Time, []float64) {
 	if len(frame.Fields) < 2 || frame.Fields[0].Len() == 0 {
 		return nil, nil
@@ -46,6 +66,50 @@ func extractFrameData(frame *data.Frame) ([]time.Time, []float64) {
 	}
 
 	return times, values
+}
+
+func extractLatestStreamingPoint(frame *data.Frame, fieldIndex int) ([]time.Time, []float64) {
+	if fieldIndex <= 0 || fieldIndex >= len(frame.Fields) {
+		return nil, nil
+	}
+
+	valueField := frame.Fields[fieldIndex]
+	if valueField.Len() == 0 {
+		return nil, nil
+	}
+
+	value, ok := numberAsFloat64(valueField.At(valueField.Len() - 1))
+	if !ok {
+		return nil, nil
+	}
+
+	return []time.Time{time.Now()}, []float64{value}
+}
+
+func numberAsFloat64(value interface{}) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case uint:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case string:
+		parsed, err := strconv.ParseFloat(v, 64)
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
 }
 
 func createStreamingFrame(stream *activeStream, channelName string, state *channelState, from, to time.Time) *data.Frame {

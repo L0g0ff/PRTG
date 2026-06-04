@@ -51,14 +51,9 @@ func (s *Service) streamUpdateLoop(
 			return nil
 
 		case <-ticker.C:
-			if stream.updateMode == "sliding" {
-				now := time.Now()
-				windowSize := timeRange.To.Sub(timeRange.From)
-				timeRange.From = now.Add(-windowSize)
-				timeRange.To = now
-			}
+			advanceTimeRange(&timeRange)
 
-			updateCtx, cancel := context.WithTimeout(ctx, stream.interval/2)
+			updateCtx, cancel := context.WithTimeout(ctx, getUpdateTimeout(stream.interval))
 			err := s.updateStreamWithMetricsQuery(updateCtx, stream, sender, query, timeRange)
 			cancel()
 
@@ -70,6 +65,24 @@ func (s *Service) streamUpdateLoop(
 			}
 		}
 	}
+}
+
+func getUpdateTimeout(interval time.Duration) time.Duration {
+	timeout := interval * 2
+	if timeout < 10*time.Second {
+		return 10 * time.Second
+	}
+	return timeout
+}
+
+func advanceTimeRange(timeRange *backend.TimeRange) {
+	now := time.Now()
+	windowSize := timeRange.To.Sub(timeRange.From)
+	if windowSize <= 0 {
+		windowSize = 30 * time.Minute
+	}
+	timeRange.From = now.Add(-windowSize)
+	timeRange.To = now
 }
 
 func (s *Service) handleStreamError(stream *activeStream, err error) {
@@ -128,28 +141,30 @@ func (s *Service) processResponseFrames(
 			continue
 		}
 
-		channelName := extractChannelName(frame)
-		if channelName == "" {
-			continue
-		}
+		for fieldIndex := 1; fieldIndex < len(frame.Fields); fieldIndex++ {
+			channelName := extractFieldChannelName(frame, fieldIndex)
+			if channelName == "" {
+				continue
+			}
 
-		channelState, exists := stream.channelStates[channelName]
-		if !exists {
-			continue
-		}
+			channelState, exists := stream.channelStates[channelName]
+			if !exists {
+				continue
+			}
 
-		times, values := extractFrameData(frame)
-		if len(times) == 0 {
-			continue
-		}
+			times, values := extractLatestStreamingPoint(frame, fieldIndex)
+			if len(times) == 0 {
+				continue
+			}
 
-		updateChannelBuffer(stream, channelState, times, values)
+			updateChannelBuffer(stream, channelState, times, values)
 
-		streamFrame := createStreamingFrame(stream, channelName, channelState, timeRange.From, timeRange.To)
+			streamFrame := createStreamingFrame(stream, channelName, channelState, timeRange.From, timeRange.To)
 
-		if err := sender.SendFrame(streamFrame, data.IncludeAll); err != nil {
-			s.logger.Error("Failed to send frame", "error", err, "channel", channelName)
-			continue
+			if err := sender.SendFrame(streamFrame, data.IncludeAll); err != nil {
+				s.logger.Error("Failed to send frame", "error", err, "channel", channelName)
+				continue
+			}
 		}
 	}
 

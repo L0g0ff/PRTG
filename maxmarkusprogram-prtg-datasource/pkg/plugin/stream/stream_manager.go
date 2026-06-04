@@ -40,10 +40,14 @@ func (s *Service) registerNewStream(stream *activeStream, streamID string) {
 
 func (s *Service) cleanupStream(stream *activeStream) {
 	s.streamManager.mu.Lock()
-	delete(s.streamManager.streams, stream.streamID)
+	if currentStream, exists := s.streamManager.streams[stream.streamID]; exists && currentStream == stream {
+		delete(s.streamManager.streams, stream.streamID)
+	}
 
 	if panelStreams, exists := s.streamManager.activeStreams[stream.panelId]; exists {
-		delete(panelStreams, stream.streamID)
+		if currentStream, exists := panelStreams[stream.streamID]; exists && currentStream == stream {
+			delete(panelStreams, stream.streamID)
+		}
 		if len(panelStreams) == 0 {
 			delete(s.streamManager.activeStreams, stream.panelId)
 		}

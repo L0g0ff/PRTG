@@ -107,11 +107,6 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 		"streamID", streamID,
 		"intervalMs", interval.Milliseconds())
 
-	if existingStream := s.getExistingStream(streamID); existingStream != nil {
-		s.updateExistingStream(existingStream, timeRangeFrom, timeRangeTo, cacheDuration)
-		return nil
-	}
-
 	s.registerNewStream(stream, streamID)
 
 	return s.runStreamLoop(ctx, stream, query, sender, timeRangeFrom, timeRangeTo)
@@ -161,6 +156,10 @@ func getTimeRange(query schema.QueryModel) (time.Time, time.Time) {
 }
 
 func getCacheDuration(query schema.QueryModel) time.Duration {
+	if query.CacheTime > 0 {
+		return time.Duration(query.CacheTime) * time.Millisecond
+	}
+
 	if query.StreamInterval > 0 {
 		cacheDuration := time.Duration(query.StreamInterval/2) * time.Millisecond
 		if cacheDuration < time.Second {
@@ -171,7 +170,10 @@ func getCacheDuration(query schema.QueryModel) time.Duration {
 	return DefaultCacheTime
 }
 
-func getBufferSize(_ schema.QueryModel) int64 {
+func getBufferSize(query schema.QueryModel) int64 {
+	if query.BufferSize > 0 {
+		return query.BufferSize
+	}
 	return DefaultBufferSize
 }
 

@@ -9,7 +9,7 @@ export function getStreamId(query: MyQuery & { panelId?: string }): string {
     query.panelId || 'default',
     query.refId || 'A',
     query.sensorId || '',
-    Array.isArray(query.channelArray) && query.channelArray.length > 0 ? query.channelArray.join('-') : query.channel || '',
+    Array.isArray(query.channelArray) && query.channelArray.length > 0 ? query.channelArray.join('_') : query.channel || '',
   ];
 
   return components.filter(Boolean).join('_');
