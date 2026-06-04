@@ -5,10 +5,11 @@ on:
     branches:
       - main
   schedule:
-    - cron: '0 3 1 * *' # Run monthly on the 1st day at 03:00 UTC.
+    - cron: '0 3 1 * *'
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
 
 concurrency:
   group: main-build-release
@@ -56,7 +57,7 @@ jobs:
         run: npm run build
 
       - name: Build backend
-        uses: magefile/mage-action@6f50bbb8ea47d56e62dee92392788acbc8192d0b # v3.1.0
+        uses: magefile/mage-action@6f50bbb8ea47d56e62dee92392788acbc8192d0b
         with:
           version: latest
           args: buildAll
@@ -65,8 +66,8 @@ jobs:
         run: chmod 0755 dist/gpx_*
 
       - name: Sign plugin
-        run: npm run sign
         if: ${{ env.GRAFANA_ACCESS_POLICY_TOKEN != '' }}
+        run: npm run sign
 
       - name: Get plugin metadata
         id: metadata
@@ -80,25 +81,26 @@ jobs:
           echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
       - name: Package plugin
+        env:
+          ARCHIVE: ${{ steps.metadata.outputs.archive }}
+          PLUGIN_ID: ${{ steps.metadata.outputs.plugin-id }}
+          RELEASE_DIR: release
         run: |
-          mkdir release
+          rm -rf "${RELEASE_DIR}"
+          mkdir -p "${RELEASE_DIR}"
           cp -R dist "${RELEASE_DIR}/${PLUGIN_ID}"
           cd "${RELEASE_DIR}"
           zip -r "../${ARCHIVE}" "${PLUGIN_ID}"
           cd ..
           sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
-        env:
-          ARCHIVE: ${{ steps.metadata.outputs.archive }}
-          PLUGIN_ID: ${{ steps.metadata.outputs.plugin-id }}
-          RELEASE_DIR: release
 
       - name: Check plugin.json
+        env:
+          ARCHIVE: ${{ steps.metadata.outputs.archive }}
         run: |
           docker run --pull=always \
             -v "$PWD/${ARCHIVE}:/archive.zip" \
             grafana/plugin-validator-cli -analyzer=metadatavalid /archive.zip
-        env:
-          ARCHIVE: ${{ steps.metadata.outputs.archive }}
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
@@ -112,6 +114,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git tag --force "${RELEASE_TAG}" "${GITHUB_SHA}"
           git push --force origin "refs/tags/${RELEASE_TAG}"
 
