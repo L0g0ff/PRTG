@@ -1,5 +1,5 @@
 import React from 'react';
-import { Combobox, FieldSet, InlineField, Stack } from '@grafana/ui';
+import { Combobox, FieldSet, InlineField, Stack, type ComboboxOption } from '@grafana/ui';
 import { SelectableValue } from '@grafana/data';
 
 interface PropertyOptionsProps {
@@ -27,7 +27,7 @@ export function PropertyOptions({
             id="query-editor-property"
             options={properties.map((p) => ({ label: p.label!, value: p.value! }))}
             value={property}
-            onChange={(option) => {
+            onChange={(option: ComboboxOption<string> | null) => {
               if (option?.value) {
                 onPropertyChange(option.value);
               }
@@ -42,7 +42,7 @@ export function PropertyOptions({
             id="query-editor-filterProperty"
             options={filterProperties.map((p) => ({ label: p.label!, value: p.value! }))}
             value={filterProperty}
-            onChange={(option) => {
+            onChange={(option: ComboboxOption<string> | null) => {
               if (option?.value) {
                 onFilterPropertyChange(option.value);
               }

@@ -200,7 +200,7 @@ export function usePrtgSelectionLists({
         }
 
         if (response.values && Array.isArray(response.values) && response.values.length > 0) {
-          const channelData = response.values[0] || {};
+          const channelData = (response.values[0] || {}) as Record<string, unknown>;
           const channelOptions = Object.entries(channelData)
             .filter(([key]) => key !== 'datetime')
             .map(([key]) => ({

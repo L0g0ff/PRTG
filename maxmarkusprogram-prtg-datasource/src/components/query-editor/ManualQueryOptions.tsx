@@ -1,5 +1,5 @@
 import React, { ChangeEvent } from 'react';
-import { Combobox, FieldSet, InlineField, Input, Stack } from '@grafana/ui';
+import { Combobox, FieldSet, InlineField, Input, Stack, type ComboboxOption } from '@grafana/ui';
 import { ManualApiMethod } from '../../types';
 
 interface ManualQueryOptionsProps {
@@ -30,7 +30,7 @@ export function ManualQueryOptions({
               value: method.value!,
             }))}
             value={manualMethod}
-            onChange={(option) => {
+            onChange={(option: ComboboxOption<string> | null) => {
               if (option?.value) {
                 onManualMethodChange(option.value);
               }
