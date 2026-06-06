@@ -1,0 +1,147 @@
+name: Create Plugin Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Base branch for the update pull request
+        default: main
+        required: true
+  schedule:
+    - cron: '0 0 1 * *' # Run once a month on the 1st day.
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  BASE_BRANCH: ${{ github.event.inputs.base || 'main' }}
+  PLUGIN_DIR: maxmarkusprogram-prtg-datasource
+  REPOSITORY: 1DeliDolu/PRTG
+  UPDATE_TOKEN: ${{ github.token }}
+
+jobs:
+  create-plugin-update:
+    name: Create plugin update PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.BASE_BRANCH }}
+          repository: ${{ env.REPOSITORY }}
+          token: ${{ env.UPDATE_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.PLUGIN_DIR }}/.nvmrc
+          cache: npm
+          cache-dependency-path: ${{ env.PLUGIN_DIR }}/package-lock.json
+
+      - name: Get latest create-plugin version
+        id: latest
+        working-directory: ${{ env.PLUGIN_DIR }}
+        run: |
+          latest_version="$(npx -y @grafana/create-plugin@latest version | sed 's/.*@//' | sed 's/ *$//' | sed '/^$/d')"
+          echo "version=${latest_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Get configured create-plugin version
+        id: configured
+        working-directory: ${{ env.PLUGIN_DIR }}
+        run: |
+          configured_version="$(jq -r '.version' .config/.cprc.json)"
+          echo "version=${configured_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether update is needed
+        id: compare
+        run: |
+          if [ "${LATEST_VERSION}" != "${CONFIGURED_VERSION}" ]; then
+            echo "update-needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "update-needed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Plugin is already using create-plugin ${CONFIGURED_VERSION}."
+          fi
+        env:
+          CONFIGURED_VERSION: ${{ steps.configured.outputs.version }}
+          LATEST_VERSION: ${{ steps.latest.outputs.version }}
+
+      - name: Install dependencies
+        if: steps.compare.outputs.update-needed == 'true'
+        working-directory: ${{ env.PLUGIN_DIR }}
+        run: npm ci
+
+      - name: Create update branch
+        if: steps.compare.outputs.update-needed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "update-grafana-create-plugin-${LATEST_VERSION}"
+        env:
+          LATEST_VERSION: ${{ steps.latest.outputs.version }}
+
+      - name: Run create-plugin update
+        if: steps.compare.outputs.update-needed == 'true'
+        working-directory: ${{ env.PLUGIN_DIR }}
+        run: npx @grafana/create-plugin@latest update --commit
+
+      - name: Check for update commits
+        if: steps.compare.outputs.update-needed == 'true'
+        id: changes
+        run: |
+          if [ -n "$(git log "origin/${BASE_BRANCH}..HEAD" --oneline)" ]; then
+            echo "should-push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-push=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::create-plugin update produced no commits."
+          fi
+
+      - name: Push update branch
+        if: steps.compare.outputs.update-needed == 'true' && steps.changes.outputs.should-push == 'true'
+        run: |
+          git push --force \
+            "https://x-access-token:${UPDATE_TOKEN}@github.com/${REPOSITORY}.git" \
+            "HEAD:update-grafana-create-plugin-${LATEST_VERSION}"
+        env:
+          LATEST_VERSION: ${{ steps.latest.outputs.version }}
+
+      - name: Create or update pull request
+        if: steps.compare.outputs.update-needed == 'true' && steps.changes.outputs.should-push == 'true'
+        env:
+          CONFIGURED_VERSION: ${{ steps.configured.outputs.version }}
+          GH_TOKEN: ${{ env.UPDATE_TOKEN }}
+          LATEST_VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          branch="update-grafana-create-plugin-${LATEST_VERSION}"
+          title="chore: bump @grafana/create-plugin configuration to ${LATEST_VERSION}"
+          body="$(cat <<EOF
+          Updates \`${PLUGIN_DIR}\` from @grafana/create-plugin ${CONFIGURED_VERSION} to ${LATEST_VERSION}.
+
+          This PR was generated automatically by the Create Plugin Update workflow.
+
+          Review the generated configuration, dependency and workflow changes before merging.
+          EOF
+          )"
+
+          pr_number="$(gh pr list \
+            --repo "${REPOSITORY}" \
+            --base "${BASE_BRANCH}" \
+            --head "${branch}" \
+            --json number \
+            --jq '.[0].number')"
+
+          if [ -n "${pr_number}" ]; then
+            gh pr edit "${pr_number}" \
+              --repo "${REPOSITORY}" \
+              --title "${title}" \
+              --body "${body}"
+          else
+            gh pr create \
+              --repo "${REPOSITORY}" \
+              --base "${BASE_BRANCH}" \
+              --head "${branch}" \
+              --title "${title}" \
+              --body "${body}"
+          fi
